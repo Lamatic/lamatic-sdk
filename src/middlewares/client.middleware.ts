@@ -99,6 +99,55 @@ class LamaticClient {
     }
   }
 
+  // Agent Request with GraphQL
+  async executeAgentRequest(agentId : string, payload : Object) {
+    try {
+
+      const graphqlQuery = {
+        query: `query ExecuteAgent(
+                $agentId: String!  
+                $payload: JSON!
+              ) 
+              {   
+                executeAgent( 
+                  agentId: $agentId   
+                  payload: $payload
+                ) 
+                {  
+                  status       
+                  result   
+                } 
+              }`,
+        variables: {
+          agentId: agentId,
+          payload : payload,
+        },
+      };
+
+      const options = {
+        method: "POST",
+        headers: await this.auth?.getHeaders(),
+        body: JSON.stringify(graphqlQuery),
+      };
+      
+      const response = await fetch(this.endpoint, options);
+      const responseText = await response.text();
+
+      let responseData = JSON.parse(responseText);
+    
+      if (!response.ok) {
+        throw new Error(
+          `API Error: ${response.status} ${response.statusText} - ${responseText}`
+        );
+      }
+
+      return responseData;
+
+    } catch (error : Error | any) {
+      handleError(error);
+    }
+  }
+
   // Execute a flow with the GraphQL API
   async executeFlow(flowId : string, data : Object) {
     if (!flowId) throw new Error("The Flow ID is required");
@@ -106,6 +155,14 @@ class LamaticClient {
 
     return await this.executeFlowRequest(flowId, data);
   }
+
+  async executeAgent(agentId : string, data : Object) {
+    if (!agentId) throw new Error("The Agent ID is required");
+    if (!data) throw new Error("The payload is required");
+
+    return await this.executeAgentRequest(agentId, data);
+  }
+
 }
 
 export default LamaticClient;

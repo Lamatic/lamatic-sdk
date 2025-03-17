@@ -76,6 +76,10 @@ class Lamatic {
     return await this.client?.executeFlow(flowID, payload);
   }
 
+  async executeAgent(agentID : string,payload : Object){
+    return await this.client?.executeAgent(agentID,payload)
+  }
+
   init() {
     console.log("Lamatic SDK initialized");
   }
