@@ -17,7 +17,7 @@ First, clone this repository:
 
 ```sh
 git clone https://github.com/your-username/lamatic-sdk-ts
-cd lamatic-sdk-ts/examples/react
+cd lamatic-sdk-ts/usecases/react
 ```
 
 Then, install dependencies:
