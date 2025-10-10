@@ -31,10 +31,10 @@ async function testSDK() {
     const payload = {
       prompt: "Hello, this is a test message for flow execution"
     };
-    
+
     console.log(`   Flow ID: ${flowId}`);
     console.log(`   Payload:`, payload);
-    
+
     const flowResponse = await lamatic.executeFlow(flowId, payload);
     console.log("✅ Flow executed successfully:");
     console.log("   Response:", JSON.stringify(flowResponse, null, 2));
@@ -50,10 +50,10 @@ async function testSDK() {
     const payload = {
       query: "Generate a creative tweet about AI and automation"
     };
-    
+
     console.log(`   Agent ID: ${agentId}`);
     console.log(`   Payload:`, payload);
-    
+
     const agentResponse = await lamatic.executeAgent(agentId, payload);
     console.log("✅ Agent executed successfully:");
     console.log("   Response:", JSON.stringify(agentResponse, null, 2));
@@ -66,10 +66,10 @@ async function testSDK() {
   console.log("🔍 Test 3: Check Status");
   try {
     const requestId = "your-request-id";
-    
+
     console.log(`   Request ID: ${requestId}`);
     console.log("   Using default polling (15s interval, 900s timeout)");
-    
+
     const statusResponse = await lamatic.checkStatus(requestId);
     console.log("✅ Status check completed:");
     console.log("   Response:", JSON.stringify(statusResponse, null, 2));
@@ -84,11 +84,11 @@ async function testSDK() {
     const requestId = "your-request-id";
     const pollInterval = 5; // 5 seconds
     const pollTimeout = 60; // 1 minute
-    
+
     console.log(`   Request ID: ${requestId}`);
     console.log(`   Poll Interval: ${pollInterval}s`);
     console.log(`   Poll Timeout: ${pollTimeout}s`);
-    
+
     const customStatusResponse = await lamatic.checkStatus(requestId, pollInterval, pollTimeout);
     console.log("✅ Custom status check completed:");
     console.log("   Response:", JSON.stringify(customStatusResponse, null, 2));
