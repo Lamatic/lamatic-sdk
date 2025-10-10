@@ -8,14 +8,32 @@
   ],
   "scripts": {
     "build": "tsc",
-    "prepare": "npm run build"
+    "prepare": "npm run build",
+    "test": "NODE_OPTIONS=--experimental-vm-modules jest",
+    "test:local": "node test-local.js",
+    "lint": "eslint src/**/*.ts",
+    "lint:fix": "eslint src/**/*.ts --fix",
+    "type-check": "tsc --noEmit",
+    "clean": "rm -rf dist"
   },
   "author": "Lamatic",
   "license": "MIT",
   "description": "Lamatic AI SDK for TypeScript to execute flow",
   "dependencies": {},
   "devDependencies": {
-    "typescript": "^5.8.2"
+    "typescript": "^5.8.2",
+    "eslint": "^8.57.0",
+    "@typescript-eslint/eslint-plugin": "^6.21.0",
+    "@typescript-eslint/parser": "^6.21.0",
+    "jest": "^29.7.0",
+    "@types/jest": "^29.5.11"
   },
-  "type": "module"
+  "type": "module",
+  "jest": {
+    "testEnvironment": "node",
+    "transform": {},
+    "testMatch": [
+      "**/test/**/*.test.js"
+    ]
+  }
 }

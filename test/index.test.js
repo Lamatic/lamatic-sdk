@@ -1,19 +1,26 @@
+import { Lamatic } from "../dist/index.js";
+
 // Lamatic Class Tests
 describe("Lamatic", () => {
-  it("should be a class", () => {
+  const mockConfig = {
+    endpoint: "https://api.example.com",
+    projectId: "test-project",
+    apiKey: "test-key"
+  };
+
+  test("should be a class", () => {
     expect(typeof Lamatic).toBe("function");
   });
 
-  it("should have a name property set to 'Lamatic'", () => {
-    const lamatic = new Lamatic();
-    expect(lamatic.name).toBe("Lamatic");
+  test("should have a name property set to 'Lamatic SDK'", () => {
+    const lamatic = new Lamatic(mockConfig);
+    expect(lamatic.name).toBe("Lamatic SDK");
   });
 
-  it("should have a getName method that returns 'Lamatic'", () => {
-    const lamatic = new Lamatic();
-    expect(lamatic.getName()).toBe("Lamatic");
+  test("should have methods executeFlow, executeAgent, and checkStatus", () => {
+    const lamatic = new Lamatic(mockConfig);
+    expect(typeof lamatic.executeFlow).toBe("function");
+    expect(typeof lamatic.executeAgent).toBe("function");
+    expect(typeof lamatic.checkStatus).toBe("function");
   });
 });
-
-
-

@@ -44,23 +44,23 @@ class Lamatic {
    * @param {Object} payload - The payload to pass to the workflow
    * @returns {Promise<LamaticResponse>} The response from the workflow
    */
-  async executeFlow(flowId : string, payload : Object): Promise<LamaticResponse> {
+  async executeFlow(flowId : string, payload : Record<string, unknown>): Promise<LamaticResponse> {
     try {
 
       const graphqlQuery = {
         query: `query ExecuteWorkflow(
-                $workflowId: String!  
+                $workflowId: String!
                 $payload: JSON!
-              ) 
-              {   
-                executeWorkflow( 
-                  workflowId: $workflowId   
+              )
+              {
+                executeWorkflow(
+                  workflowId: $workflowId
                   payload: $payload
-                ) 
-                {  
-                  status       
-                  result   
-                } 
+                )
+                {
+                  status
+                  result
+                }
               }`,
         variables: {
           workflowId: flowId,
@@ -74,10 +74,10 @@ class Lamatic {
         headers: headers,
         body: JSON.stringify(graphqlQuery),
       };
-      
+
       const response = await fetch(this.endpoint, options);
       const responseText = await response.text();
-      let responseData : LamaticAPIResponse = JSON.parse(responseText);
+      const responseData : LamaticAPIResponse = JSON.parse(responseText);
       if (responseData.errors) {
         return {
           status: "error",
@@ -86,15 +86,16 @@ class Lamatic {
           statusCode: response.status
         }
       }
-      
+
       return {
         ...responseData.data.executeWorkflow,
         statusCode: response.status
       };
 
-    } catch (error : Error | any) {
-      console.error("[Lamatic SDK Error] : ", error.message);
-      throw new Error(error.message);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      console.error("[Lamatic SDK Error] : ", errorMessage);
+      throw new Error(errorMessage);
     }
   }
 
@@ -104,23 +105,23 @@ class Lamatic {
    * @param {Object} payload - The payload to pass to the workflow
    * @returns {Promise<LamaticResponse>} The response from the workflow
    */
-  async executeAgent(agentId : string, payload : Object): Promise<LamaticResponse> {
+  async executeAgent(agentId : string, payload : Record<string, unknown>): Promise<LamaticResponse> {
     try {
 
       const graphqlQuery = {
         query: `query ExecuteAgent(
-                $agentId: String!  
+                $agentId: String!
                 $payload: JSON!
-              ) 
-              {   
-                executeAgent( 
-                  agentId: $agentId   
+              )
+              {
+                executeAgent(
+                  agentId: $agentId
                   payload: $payload
-                ) 
-                {  
-                  status       
-                  result   
-                } 
+                )
+                {
+                  status
+                  result
+                }
               }`,
         variables: {
           agentId: agentId,
@@ -134,10 +135,10 @@ class Lamatic {
         headers: headers,
         body: JSON.stringify(graphqlQuery),
       };
-      
+
       const response = await fetch(this.endpoint, options);
       const responseText = await response.text();
-      let responseData : LamaticAPIResponse = JSON.parse(responseText);
+      const responseData : LamaticAPIResponse = JSON.parse(responseText);
       if (responseData.errors) {
         return {
           status: "error",
@@ -151,9 +152,10 @@ class Lamatic {
         statusCode: response.status
       };
 
-    } catch (error : Error | any) {
-      console.error("[Lamatic SDK Error] : ", error.message);
-      throw new Error(error.message);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      console.error("[Lamatic SDK Error] : ", errorMessage);
+      throw new Error(errorMessage);
     }
   }
 
@@ -194,11 +196,11 @@ class Lamatic {
           headers: headers,
           body: JSON.stringify(graphqlQuery),
         };
-        
+
         const response = await fetch(this.endpoint, options);
         const responseText = await response.text();
-        let responseData: LamaticAPIResponse = JSON.parse(responseText);
-        
+        const responseData: LamaticAPIResponse = JSON.parse(responseText);
+
         if (responseData.errors) {
           return {
             status: "error",
@@ -207,7 +209,7 @@ class Lamatic {
             statusCode: response.status
           };
         }
-        
+
         const statusResult = {
           ...responseData.data.checkStatus,
           statusCode: response.status
@@ -223,12 +225,13 @@ class Lamatic {
           await new Promise(resolve => setTimeout(resolve, intervalMs));
         }
 
-      } catch (error: Error | any) {
-        console.error("[Lamatic SDK Error] : ", error.message);
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+        console.error("[Lamatic SDK Error] : ", errorMessage);
         return {
           status: "error",
           result: null,
-          message: error.message,
+          message: errorMessage,
           statusCode: 500
         };
       }
@@ -260,7 +263,7 @@ class Lamatic {
       "Content-Type" : "application/json",
       "Authorization": `Bearer ${this.apiKey}`,
       "x-project-id": this.projectId
-    };  
+    };
   }
 
   /**

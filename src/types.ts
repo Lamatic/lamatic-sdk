@@ -22,7 +22,7 @@ export interface LamaticAPIResponse {
 
 export interface LamaticResponse {
     status: LamaticStatus;
-    result: Record<string, any> | null;
+    result: Record<string, unknown> | null;
     message?: string;
     statusCode?: number;
 }
