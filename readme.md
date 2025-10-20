@@ -13,6 +13,7 @@
 <p >
   <a href="https://www.npmjs.com/package/lamatic">Lamatic SDK</a> provides a simple way to interact with the Lamatic AI platform, allowing you to execute workflows and integrate AI capabilities into your applications.
 <p/>
+
 ## Installation
 
 Install the Lamatic SDK using npm:
