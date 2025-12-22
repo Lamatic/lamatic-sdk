@@ -1,4 +1,7 @@
-# Lamatic Go SDK
+# Lamatic Ai Go SDK
+
+> [!IMPORTANT]
+> This is an **unofficial** Go SDK for the [Lamatic AI](https://lamatic.ai/) platform.
 
 The Lamatic Go SDK provides a simple way to interact with the Lamatic AI platform from your Go applications.
 
@@ -14,6 +17,7 @@ go get github.com/AasheeshLikePanner/lamatic-sdk-go
 package main
 
 import (
+	"context"
 	"fmt"
 	"github.com/AasheeshLikePanner/lamatic-sdk-go/pkg/lamatic"
 )
@@ -29,7 +33,8 @@ func main() {
 		panic(err)
 	}
 
-	resp, err := client.ExecuteFlow("your-flow-id", map[string]interface{}{
+	// All API calls require context.Context
+	resp, err := client.ExecuteFlow(context.Background(), "your-flow-id", map[string]interface{}{
 		"prompt": "Hello, AI!",
 	})
 	if err != nil {
