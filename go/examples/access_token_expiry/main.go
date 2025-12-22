@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 
@@ -28,7 +29,7 @@ func main() {
 	flowID := "flow-abc"
 	payload := map[string]interface{}{"message": "test"}
 
-	resp, err := client.ExecuteFlow(flowID, payload)
+	resp, err := client.ExecuteFlow(context.Background(), flowID, payload)
 	if err != nil {
 		fmt.Printf("Request failed: %v\n", err)
 		return
@@ -40,7 +41,7 @@ func main() {
 		newToken := mockGetNewToken()
 		client.UpdateAccessToken(newToken)
 
-		resp, err = client.ExecuteFlow(flowID, payload)
+		resp, err = client.ExecuteFlow(context.Background(), flowID, payload)
 		if err != nil {
 			fmt.Printf("Retry failed: %v\n", err)
 			return

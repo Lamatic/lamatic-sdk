@@ -2,6 +2,7 @@ package client
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -75,7 +76,8 @@ func (c *Client) GetHeaders() http.Header {
 	return headers
 }
 
-func (c *Client) DoRequest(query string, variables map[string]interface{}) (*GraphQLResponse, int, error) {
+// DoRequest executes a GraphQL request and returns the response and status code.
+func (c *Client) DoRequest(ctx context.Context, query string, variables map[string]interface{}) (*GraphQLResponse, int, error) {
 	reqBody := GraphQLRequest{
 		Query:     query,
 		Variables: variables,
@@ -86,7 +88,7 @@ func (c *Client) DoRequest(query string, variables map[string]interface{}) (*Gra
 		return nil, 0, err
 	}
 
-	req, err := http.NewRequest("POST", c.endpoint, bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequestWithContext(ctx, "POST", c.endpoint, bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return nil, 0, err
 	}

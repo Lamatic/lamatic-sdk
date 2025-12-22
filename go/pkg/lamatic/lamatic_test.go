@@ -1,6 +1,7 @@
 package lamatic
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -28,7 +29,7 @@ func TestExecuteFlow(t *testing.T) {
 		APIKey:    &apiKey,
 	})
 
-	resp, err := client.ExecuteFlow("test-flow", map[string]interface{}{"input": "test"})
+	resp, err := client.ExecuteFlow(context.Background(), "test-flow", map[string]interface{}{"input": "test"})
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
@@ -63,7 +64,7 @@ func TestExecuteAgent(t *testing.T) {
 		APIKey:    &apiKey,
 	})
 
-	resp, err := client.ExecuteAgent("test-agent", map[string]interface{}{"input": "test"})
+	resp, err := client.ExecuteAgent(context.Background(), "test-agent", map[string]interface{}{"input": "test"})
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}

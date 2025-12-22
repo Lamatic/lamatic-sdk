@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/AasheeshLikePanner/lamatic-sdk-go/pkg/lamatic"
@@ -20,7 +21,7 @@ func main() {
 		return
 	}
 
-	resp, err := client.ExecuteFlow("flow-abc", map[string]interface{}{
+	resp, err := client.ExecuteFlow(context.Background(), "flow-abc", map[string]interface{}{
 		"message": "Hello from Go!",
 	})
 

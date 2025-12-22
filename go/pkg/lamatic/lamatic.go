@@ -1,6 +1,7 @@
 package lamatic
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -31,7 +32,6 @@ type Response struct {
 
 type Client struct {
 	httpClient *client.Client
-	Name       string
 }
 
 func NewClient(config Config) (*Client, error) {
@@ -47,12 +47,7 @@ func NewClient(config Config) (*Client, error) {
 
 	return &Client{
 		httpClient: httpClient,
-		Name:       "Lamatic SDK",
 	}, nil
-}
-
-func (c *Client) GetName() string {
-	return c.Name
 }
 
 func (c *Client) UpdateAccessToken(token string) {
@@ -76,7 +71,7 @@ type checkStatusData struct {
 	CheckStatus executeResponse `json:"checkStatus"`
 }
 
-func (c *Client) ExecuteFlow(flowId string, payload interface{}) (*Response, error) {
+func (c *Client) ExecuteFlow(ctx context.Context, flowId string, payload interface{}) (*Response, error) {
 	query := `query ExecuteWorkflow(
                 $workflowId: String!  
                 $payload: JSON!
@@ -97,7 +92,7 @@ func (c *Client) ExecuteFlow(flowId string, payload interface{}) (*Response, err
 		"payload":    payload,
 	}
 
-	resp, statusCode, err := c.httpClient.DoRequest(query, variables)
+	resp, statusCode, err := c.httpClient.DoRequest(ctx, query, variables)
 	if err != nil {
 		return nil, err
 	}
@@ -123,7 +118,7 @@ func (c *Client) ExecuteFlow(flowId string, payload interface{}) (*Response, err
 	}, nil
 }
 
-func (c *Client) ExecuteAgent(agentId string, payload interface{}) (*Response, error) {
+func (c *Client) ExecuteAgent(ctx context.Context, agentId string, payload interface{}) (*Response, error) {
 	query := `query ExecuteAgent(
                 $agentId: String!  
                 $payload: JSON!
@@ -144,7 +139,7 @@ func (c *Client) ExecuteAgent(agentId string, payload interface{}) (*Response, e
 		"payload": payload,
 	}
 
-	resp, statusCode, err := c.httpClient.DoRequest(query, variables)
+	resp, statusCode, err := c.httpClient.DoRequest(ctx, query, variables)
 	if err != nil {
 		return nil, err
 	}
@@ -170,7 +165,7 @@ func (c *Client) ExecuteAgent(agentId string, payload interface{}) (*Response, e
 	}, nil
 }
 
-func (c *Client) CheckStatus(requestId string, pollInterval int, pollTimeout int) (*Response, error) {
+func (c *Client) CheckStatus(ctx context.Context, requestId string, pollInterval int, pollTimeout int) (*Response, error) {
 	if pollInterval <= 0 {
 		pollInterval = 15
 	}
@@ -178,9 +173,11 @@ func (c *Client) CheckStatus(requestId string, pollInterval int, pollTimeout int
 		pollTimeout = 900
 	}
 
-	startTime := time.Now()
-	timeout := time.Duration(pollTimeout) * time.Second
-	interval := time.Duration(pollInterval) * time.Second
+	timeoutCtx, cancel := context.WithTimeout(ctx, time.Duration(pollTimeout)*time.Second)
+	defer cancel()
+
+	ticker := time.NewTicker(time.Duration(pollInterval) * time.Second)
+	defer ticker.Stop()
 
 	query := `query CheckStatus(
                   $requestId: String!
@@ -194,15 +191,18 @@ func (c *Client) CheckStatus(requestId string, pollInterval int, pollTimeout int
 		"requestId": requestId,
 	}
 
-	for time.Since(startTime) < timeout {
-		resp, statusCode, err := c.httpClient.DoRequest(query, variables)
+	for {
+		resp, statusCode, err := c.httpClient.DoRequest(timeoutCtx, query, variables)
 		if err != nil {
-			return &Response{
-				Status:     StatusError,
-				Result:     nil,
-				Message:    err.Error(),
-				StatusCode: 500,
-			}, nil
+			if timeoutCtx.Err() != nil {
+				return &Response{
+					Status:     StatusError,
+					Result:     nil,
+					Message:    fmt.Sprintf("Request checkStatus timed out or cancelled: %v", timeoutCtx.Err()),
+					StatusCode: 408,
+				}, nil
+			}
+			return nil, err
 		}
 
 		if len(resp.Errors) > 0 {
@@ -219,23 +219,24 @@ func (c *Client) CheckStatus(requestId string, pollInterval int, pollTimeout int
 			return nil, err
 		}
 
-		if data.CheckStatus.Status == StatusSuccess || data.CheckStatus.Status == StatusError || data.CheckStatus.Status == "failed" {
+		status := data.CheckStatus.Status
+		if status == StatusSuccess || status == StatusError || status == "failed" {
 			return &Response{
-				Status:     data.CheckStatus.Status,
+				Status:     status,
 				Result:     data.CheckStatus.Result,
 				StatusCode: statusCode,
 			}, nil
 		}
 
-		if time.Since(startTime)+interval < timeout {
-			time.Sleep(interval)
+		select {
+		case <-timeoutCtx.Done():
+			return &Response{
+				Status:     StatusError,
+				Result:     nil,
+				Message:    fmt.Sprintf("Request checkStatus timed out or cancelled: %v", timeoutCtx.Err()),
+				StatusCode: 408,
+			}, nil
+		case <-ticker.C:
 		}
 	}
-
-	return &Response{
-		Status:     StatusError,
-		Result:     nil,
-		Message:    fmt.Sprintf("Request checkStatus timed out after %d seconds", pollTimeout),
-		StatusCode: 408,
-	}, nil
 }
