@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/lamatic/lamatic-sdk-go/internal/client"
+	"github.com/AasheeshLikePanner/lamatic-sdk-go/internal/client"
 )
 
 type Status string
@@ -31,6 +31,7 @@ type Response struct {
 
 type Client struct {
 	httpClient *client.Client
+	Name       string
 }
 
 func NewClient(config Config) (*Client, error) {
@@ -46,7 +47,12 @@ func NewClient(config Config) (*Client, error) {
 
 	return &Client{
 		httpClient: httpClient,
+		Name:       "Lamatic SDK",
 	}, nil
+}
+
+func (c *Client) GetName() string {
+	return c.Name
 }
 
 func (c *Client) UpdateAccessToken(token string) {

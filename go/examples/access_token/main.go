@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/lamatic/lamatic-sdk-go/pkg/lamatic"
+	"github.com/AasheeshLikePanner/lamatic-sdk-go/pkg/lamatic"
 )
 
 func main() {

@@ -5,7 +5,7 @@ The Lamatic Go SDK provides a simple way to interact with the Lamatic AI platfor
 ## Installation
 
 ```bash
-go get github.com/lamatic/lamatic-sdk-go
+go get github.com/AasheeshLikePanner/lamatic-sdk-go
 ```
 
 ## Getting Started
@@ -15,7 +15,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/lamatic/lamatic-sdk-go/pkg/lamatic"
+	"github.com/AasheeshLikePanner/lamatic-sdk-go/pkg/lamatic"
 )
 
 func main() {
