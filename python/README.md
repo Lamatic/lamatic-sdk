@@ -1,11 +1,27 @@
-# Lmatic Python SDK
+# Lamatic Python SDK
 
 Python SDK for [Lamatic](https://lamatic.ai).
+
+**Requires Python 3.10+**
 
 ## Installation
 
 ```bash
 pip install lamatic-python
+```
+
+### Install from source
+
+```bash
+git clone https://github.com/your-org/lamatic-python.git
+cd lamatic-python
+pip install -e .
+```
+
+### For development (includes test dependencies)
+
+```bash
+pip install -e ".[dev]"
 ```
 
 ## Quick Start
