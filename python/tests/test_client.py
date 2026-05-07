@@ -68,17 +68,6 @@ def test_execute_flow_graphql_error(client):
 
 
 @respx.mock
-def test_execute_agent_success(client):
-    respx.post(ENDPOINT).mock(return_value=httpx.Response(
-        200,
-        json={"data": {"executeAgent": {"status": "success", "result": {"reply": "done"}}}},
-    ))
-    result = client.execute_agent("agent-1", {"message": "hello"})
-    assert result.status == "success"
-    assert result.result == {"reply": "done"}
-
-
-@respx.mock
 def test_check_status_success(client):
     respx.post(ENDPOINT).mock(return_value=httpx.Response(
         200,
@@ -110,6 +99,29 @@ async def test_async_execute_flow_success(client):
     assert result.status == "success"
     assert result.result == {"out": "yes"}
 
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_async_check_status_success(client):
+    respx.post(ENDPOINT).mock(return_value=httpx.Response(
+        200,
+        json={"data": {"checkStatus": {"status": "success", "result": {"done": True}}}},
+    ))
+    result = await client.async_check_status("req-1", poll_interval=1, poll_timeout=5)
+    assert result.status == "success"
+    assert result.result == {"done": True}
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_async_check_status_timeout(client):
+    respx.post(ENDPOINT).mock(return_value=httpx.Response(
+        200,
+        json={"data": {"checkStatus": {"status": "in_progress", "result": None}}},
+    ))
+    result = await client.async_check_status("req-slow", poll_interval=1, poll_timeout=2)
+    assert result.status == "error"
+    assert result.status_code == 408
 
 
 def test_update_access_token(client):

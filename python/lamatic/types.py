@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 
-LamaticStatus = Literal["success", "error"]
+LamaticStatus = Literal["success", "error", "failed", "in_progress"]
 
 
 @dataclass

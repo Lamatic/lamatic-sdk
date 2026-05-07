@@ -17,6 +17,7 @@ class Lamatic:
         project_id: str,
         api_key: str | None = None,
         access_token: str | None = None,
+        timeout: float = 120.0,
     ) -> None:
         if not endpoint:
             raise ValueError("Endpoint URL is required")
@@ -29,6 +30,7 @@ class Lamatic:
         self.project_id = project_id
         self.api_key = api_key
         self.access_token = access_token
+        self.timeout = timeout
 
     def _get_headers(self) -> dict[str, str]:
         if self.access_token:
@@ -70,7 +72,7 @@ class Lamatic:
         query = {
             "query": """
                 query ExecuteWorkflow($workflowId: String!, $payload: JSON!) {
-                    executeWorkflow(workflowId: $workflowId payload: $payload) {
+                    executeWorkflow(workflowId: $workflowId, payload: $payload) {
                         status
                         result
                     }
@@ -79,30 +81,9 @@ class Lamatic:
             "variables": {"workflowId": flow_id, "payload": payload},
         }
         try:
-            with httpx.Client() as client:
+            with httpx.Client(timeout=self.timeout) as client:
                 response = client.post(self.endpoint, json=query, headers=self._get_headers())
             return self._parse_response(response, "executeWorkflow")
-        except Exception as e:
-            print(f"[Lamatic SDK Error]: {e}")
-            raise
-
-    def execute_agent(self, agent_id: str, payload: dict) -> LamaticResponse:
-        """Execute an agent synchronously."""
-        query = {
-            "query": """
-                query ExecuteAgent($agentId: String!, $payload: JSON!) {
-                    executeAgent(agentId: $agentId payload: $payload) {
-                        status
-                        result
-                    }
-                }
-            """,
-            "variables": {"agentId": agent_id, "payload": payload},
-        }
-        try:
-            with httpx.Client() as client:
-                response = client.post(self.endpoint, json=query, headers=self._get_headers())
-            return self._parse_response(response, "executeAgent")
         except Exception as e:
             print(f"[Lamatic SDK Error]: {e}")
             raise
@@ -117,7 +98,10 @@ class Lamatic:
         query = {
             "query": """
                 query CheckStatus($requestId: String!) {
-                    checkStatus(requestId: $requestId)
+                    checkStatus(requestId: $requestId) {
+                        status
+                        result
+                    }
                 }
             """,
             "variables": {"requestId": request_id},
@@ -125,7 +109,7 @@ class Lamatic:
         start = time.monotonic()
         while time.monotonic() - start < poll_timeout:
             try:
-                with httpx.Client() as client:
+                with httpx.Client(timeout=self.timeout) as client:
                     response = client.post(self.endpoint, json=query, headers=self._get_headers())
                 result = self._parse_response(response, "checkStatus")
                 if result.status in ("success", "error", "failed"):
@@ -150,7 +134,7 @@ class Lamatic:
         query = {
             "query": """
                 query ExecuteWorkflow($workflowId: String!, $payload: JSON!) {
-                    executeWorkflow(workflowId: $workflowId payload: $payload) {
+                    executeWorkflow(workflowId: $workflowId, payload: $payload) {
                         status
                         result
                     }
@@ -159,30 +143,9 @@ class Lamatic:
             "variables": {"workflowId": flow_id, "payload": payload},
         }
         try:
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
                 response = await client.post(self.endpoint, json=query, headers=self._get_headers())
             return self._parse_response(response, "executeWorkflow")
-        except Exception as e:
-            print(f"[Lamatic SDK Error]: {e}")
-            raise
-
-    async def async_execute_agent(self, agent_id: str, payload: dict) -> LamaticResponse:
-        """Execute an agent asynchronously."""
-        query = {
-            "query": """
-                query ExecuteAgent($agentId: String! $payload: JSON!) {
-                    executeAgent(agentId: $agentId payload: $payload) {
-                        status
-                        result
-                    }
-                }
-            """,
-            "variables": {"agentId": agent_id, "payload": payload},
-        }
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(self.endpoint, json=query, headers=self._get_headers())
-            return self._parse_response(response, "executeAgent")
         except Exception as e:
             print(f"[Lamatic SDK Error]: {e}")
             raise
@@ -197,7 +160,10 @@ class Lamatic:
         query = {
             "query": """
                 query CheckStatus($requestId: String!) {
-                    checkStatus(requestId: $requestId)
+                    checkStatus(requestId: $requestId) {
+                        status
+                        result
+                    }
                 }
             """,
             "variables": {"requestId": request_id},
@@ -205,7 +171,7 @@ class Lamatic:
         start = time.monotonic()
         while time.monotonic() - start < poll_timeout:
             try:
-                async with httpx.AsyncClient() as client:
+                async with httpx.AsyncClient(timeout=self.timeout) as client:
                     response = await client.post(self.endpoint, json=query, headers=self._get_headers())
                 result = self._parse_response(response, "checkStatus")
                 if result.status in ("success", "error", "failed"):

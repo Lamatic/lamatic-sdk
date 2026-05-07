@@ -41,9 +41,6 @@ response = lamatic.execute_flow("flow-id", {"prompt": "Hello!"})
 print(response.status)  # "success"
 print(response.result)
 
-# Execute an agent (sync)
-response = lamatic.execute_agent("agent-id", {"message": "Summarize this"})
-
 # Poll status
 response = lamatic.check_status("request-id", poll_interval=5, poll_timeout=120)
 

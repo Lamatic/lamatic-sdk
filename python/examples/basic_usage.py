@@ -30,20 +30,7 @@ def run_flow():
 
 
 
-# Example 2: Execute an agent (sync)
-
-
-def run_agent():
-    response = lamatic.execute_agent(
-        agent_id="your-agent-id",
-        payload={"message": "Summarize this text"},
-    )
-    print("Status:", response.status)
-    print("Result:", response.result)
-
-
-
-# Example 3: Poll status (sync)
+# Poll status (sync)
 
 
 def poll_status(request_id: str):
