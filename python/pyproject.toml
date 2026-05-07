@@ -10,7 +10,7 @@ readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.10"
 authors = [
-    { name = "Lamatic", email = "akshatv@lamatic.ai" },
+    { name = "Lamatic", email = "hello@lamatic.ai" },
 ]
 keywords = ["lamatic", "ai", "sdk", "graphql", "agents", "workflows", "llm"]
 classifiers = [
@@ -40,8 +40,8 @@ dev = [
 [project.urls]
 Homepage = "https://lamatic.ai"
 Documentation = "https://lamatic.ai/docs"
-Repository = "https://github.com/YOUR_GITHUB_ORG/lamatic-python"
-Issues = "https://github.com/YOUR_GITHUB_ORG/lamatic-python/issues"
+Repository = "https://github.com/Lamatic/Lamatic-Python-SDK"
+Issues = "https://github.com/Lamatic/Lamatic-Python-SDK/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["lamatic"]
