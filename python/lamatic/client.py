@@ -1,9 +1,12 @@
 import asyncio
+import logging
 import time
 
 import httpx
 
 from .types import LamaticResponse
+
+logger = logging.getLogger(__name__)
 
 
 class Lamatic:
@@ -85,7 +88,7 @@ class Lamatic:
                 response = client.post(self.endpoint, json=query, headers=self._get_headers())
             return self._parse_response(response, "executeWorkflow")
         except Exception as e:
-            print(f"[Lamatic SDK Error]: {e}")
+            logger.error("executeFlow request failed: %s", e)
             raise
 
     def check_status(
@@ -114,12 +117,14 @@ class Lamatic:
                 result = self._parse_response(response, "checkStatus")
                 if result.status in ("success", "error", "failed"):
                     return result
-                remaining = poll_timeout - (time.monotonic() - start)
-                if remaining > poll_interval:
-                    time.sleep(poll_interval)
             except Exception as e:
-                print(f"[Lamatic SDK Error]: {e}")
+                logger.error("checkStatus request failed: %s", e)
                 return LamaticResponse(status="error", result=None, message=str(e), status_code=500)
+
+            remaining = poll_timeout - (time.monotonic() - start)
+            if remaining <= 0:
+                break
+            time.sleep(min(poll_interval, remaining))
 
         return LamaticResponse(
             status="error",
@@ -147,7 +152,7 @@ class Lamatic:
                 response = await client.post(self.endpoint, json=query, headers=self._get_headers())
             return self._parse_response(response, "executeWorkflow")
         except Exception as e:
-            print(f"[Lamatic SDK Error]: {e}")
+            logger.error("executeFlow request failed: %s", e)
             raise
 
     async def async_check_status(
@@ -176,12 +181,14 @@ class Lamatic:
                 result = self._parse_response(response, "checkStatus")
                 if result.status in ("success", "error", "failed"):
                     return result
-                remaining = poll_timeout - (time.monotonic() - start)
-                if remaining > poll_interval:
-                    await asyncio.sleep(poll_interval)
             except Exception as e:
-                print(f"[Lamatic SDK Error]: {e}")
+                logger.error("checkStatus request failed: %s", e)
                 return LamaticResponse(status="error", result=None, message=str(e), status_code=500)
+
+            remaining = poll_timeout - (time.monotonic() - start)
+            if remaining <= 0:
+                break
+            await asyncio.sleep(min(poll_interval, remaining))
 
         return LamaticResponse(
             status="error",
