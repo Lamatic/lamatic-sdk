@@ -13,8 +13,8 @@ pip install lamatic-python
 ### Install from source
 
 ```bash
-git clone https://github.com/your-org/lamatic-python.git
-cd lamatic-python
+git clone https://github.com/Lamatic/Lamatic-Python-SDK.git
+cd Lamatic-Python-SDK
 pip install -e .
 ```
 
