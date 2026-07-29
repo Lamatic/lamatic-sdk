@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "lamatic-python"
+name = "lamatic"
 dynamic = ["version"]
 description = "Python SDK for the Lamatic API"
 readme = "README.md"

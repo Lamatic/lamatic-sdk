@@ -7,7 +7,7 @@ Python SDK for [Lamatic](https://lamatic.ai).
 ## Installation
 
 ```bash
-pip install lamatic-python
+pip install lamatic
 ```
 
 ### Install from source
