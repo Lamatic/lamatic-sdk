@@ -16,11 +16,19 @@ const (
 	StatusError   Status = "error"
 )
 
+// Logger is satisfied by *log.Logger and lets callers plug in their own
+// logging backend to observe request failures.
+type Logger interface {
+	Printf(format string, args ...interface{})
+}
+
 type Config struct {
 	Endpoint    string
 	ProjectID   string
 	APIKey      *string
 	AccessToken *string
+	// Logger, if set, receives diagnostic messages for failed requests.
+	Logger Logger
 }
 
 type Response struct {
@@ -28,6 +36,23 @@ type Response struct {
 	Result     map[string]interface{} `json:"result"`
 	Message    string                 `json:"message,omitempty"`
 	StatusCode int                    `json:"statusCode,omitempty"`
+}
+
+// Decode unmarshals the response Result into v, which should be a pointer.
+// It's a convenience for callers who want a typed struct instead of the raw
+// map[string]interface{}.
+func (r *Response) Decode(v interface{}) error {
+	raw, err := json.Marshal(r.Result)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(raw, v)
+}
+
+// AsyncResult carries the outcome of an asynchronous SDK call.
+type AsyncResult struct {
+	Response *Response
+	Err      error
 }
 
 type Client struct {
@@ -40,6 +65,7 @@ func NewClient(config Config) (*Client, error) {
 		ProjectID:   config.ProjectID,
 		APIKey:      config.APIKey,
 		AccessToken: config.AccessToken,
+		Logger:      config.Logger,
 	})
 	if err != nil {
 		return nil, err
@@ -61,10 +87,6 @@ type executeResponse struct {
 
 type executeWorkflowData struct {
 	ExecuteWorkflow executeResponse `json:"executeWorkflow"`
-}
-
-type executeAgentData struct {
-	ExecuteAgent executeResponse `json:"executeAgent"`
 }
 
 type checkStatusData struct {
@@ -118,51 +140,16 @@ func (c *Client) ExecuteFlow(ctx context.Context, flowId string, payload interfa
 	}, nil
 }
 
-func (c *Client) ExecuteAgent(ctx context.Context, agentId string, payload interface{}) (*Response, error) {
-	query := `query ExecuteAgent(
-                $agentId: String!  
-                $payload: JSON!
-              ) 
-              {   
-                executeAgent( 
-                  agentId: $agentId   
-                  payload: $payload
-                ) 
-                {  
-                  status       
-                  result   
-                } 
-              }`
-
-	variables := map[string]interface{}{
-		"agentId": agentId,
-		"payload": payload,
-	}
-
-	resp, statusCode, err := c.httpClient.DoRequest(ctx, query, variables)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(resp.Errors) > 0 {
-		return &Response{
-			Status:     StatusError,
-			Result:     nil,
-			Message:    resp.Errors[0].Message,
-			StatusCode: statusCode,
-		}, nil
-	}
-
-	var data executeAgentData
-	if err := json.Unmarshal(resp.Data, &data); err != nil {
-		return nil, err
-	}
-
-	return &Response{
-		Status:     data.ExecuteAgent.Status,
-		Result:     data.ExecuteAgent.Result,
-		StatusCode: statusCode,
-	}, nil
+// ExecuteFlowAsync runs ExecuteFlow in the background and reports the result on the
+// returned channel, which is closed after a single value is sent.
+func (c *Client) ExecuteFlowAsync(ctx context.Context, flowId string, payload interface{}) <-chan AsyncResult {
+	out := make(chan AsyncResult, 1)
+	go func() {
+		defer close(out)
+		resp, err := c.ExecuteFlow(ctx, flowId, payload)
+		out <- AsyncResult{Response: resp, Err: err}
+	}()
+	return out
 }
 
 func (c *Client) CheckStatus(ctx context.Context, requestId string, pollInterval int, pollTimeout int) (*Response, error) {
@@ -239,4 +226,16 @@ func (c *Client) CheckStatus(ctx context.Context, requestId string, pollInterval
 		case <-ticker.C:
 		}
 	}
+}
+
+// CheckStatusAsync runs CheckStatus in the background and reports the result on the
+// returned channel, which is closed after a single value is sent.
+func (c *Client) CheckStatusAsync(ctx context.Context, requestId string, pollInterval int, pollTimeout int) <-chan AsyncResult {
+	out := make(chan AsyncResult, 1)
+	go func() {
+		defer close(out)
+		resp, err := c.CheckStatus(ctx, requestId, pollInterval, pollTimeout)
+		out <- AsyncResult{Response: resp, Err: err}
+	}()
+	return out
 }
