@@ -9,11 +9,17 @@ import (
 	"net/http"
 )
 
+// Logger is satisfied by *log.Logger and lets callers observe request failures.
+type Logger interface {
+	Printf(format string, args ...interface{})
+}
+
 type Config struct {
 	Endpoint    string
 	ProjectID   string
 	APIKey      *string
 	AccessToken *string
+	Logger      Logger
 }
 
 type Client struct {
@@ -21,6 +27,7 @@ type Client struct {
 	projectId   string
 	apiKey      *string
 	accessToken *string
+	logger      Logger
 	httpClient  *http.Client
 }
 
@@ -54,8 +61,15 @@ func New(config Config) (*Client, error) {
 		projectId:   config.ProjectID,
 		apiKey:      config.APIKey,
 		accessToken: config.AccessToken,
+		logger:      config.Logger,
 		httpClient:  &http.Client{},
 	}, nil
+}
+
+func (c *Client) logf(format string, args ...interface{}) {
+	if c.logger != nil {
+		c.logger.Printf(format, args...)
+	}
 }
 
 func (c *Client) UpdateAccessToken(token string) {
@@ -97,6 +111,7 @@ func (c *Client) DoRequest(ctx context.Context, query string, variables map[stri
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
+		c.logf("lamatic: request failed: %v", err)
 		return nil, 0, err
 	}
 	defer resp.Body.Close()
@@ -104,14 +119,21 @@ func (c *Client) DoRequest(ctx context.Context, query string, variables map[stri
 	if resp.StatusCode >= 400 {
 		var gQLResp GraphQLResponse
 		if err := json.NewDecoder(resp.Body).Decode(&gQLResp); err == nil && len(gQLResp.Errors) > 0 {
+			c.logf("lamatic: request returned status %d with GraphQL errors: %v", resp.StatusCode, gQLResp.Errors)
 			return &gQLResp, resp.StatusCode, nil
 		}
+		c.logf("lamatic: request failed with status code %d", resp.StatusCode)
 		return nil, resp.StatusCode, fmt.Errorf("API request failed with status code %d", resp.StatusCode)
 	}
 
 	var gQLResp GraphQLResponse
 	if err := json.NewDecoder(resp.Body).Decode(&gQLResp); err != nil {
+		c.logf("lamatic: failed to decode response: %v", err)
 		return nil, resp.StatusCode, fmt.Errorf("failed to decode response: %v", err)
+	}
+
+	if len(gQLResp.Errors) > 0 {
+		c.logf("lamatic: GraphQL errors: %v", gQLResp.Errors)
 	}
 
 	return &gQLResp, resp.StatusCode, nil

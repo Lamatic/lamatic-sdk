@@ -71,14 +71,21 @@ go-sdk/
     │   └── main.go            # Example: Access Token auth
     ├── access_token_expiry/
     │   └── main.go            # Example: Handling token expiry
-    └── token_generation/
-        └── main.go            # Example: Server-side JWT generation
+    ├── token_generation/
+    │   └── main.go            # Example: Server-side JWT generation
+    └── decode_and_async/
+        └── main.go            # Example: Async execution, typed decoding, logging
 ```
 
 ## Features
 
-- Execute Workflows (Flows)
-- Execute Agents
-- Job Polling with `CheckStatus`
+- Execute Workflows (Flows), synchronously or via `ExecuteFlowAsync`
+- Job Polling with `CheckStatus`, synchronously or via `CheckStatusAsync`
+- Decode results into your own structs with `Response.Decode`
+- Optional `Logger` hook on `Config` for observing request failures
 - Support for API Key and Access Token (JWT) authentication
 - Proper internal/pkg separation for Go best practices
+
+> [!NOTE]
+> `ExecuteAgent` has been removed. The underlying `executeAgent` API is deprecated
+> platform-side; use `ExecuteFlow` instead.
