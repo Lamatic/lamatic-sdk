@@ -1,4 +1,4 @@
-import { LamaticConfig, LamaticAPIResponse, LamaticResponse } from "./types";
+import { LamaticConfig, LamaticAPIResponse, LamaticResponse, LamaticStreamChunk, PollOptions } from "./types";
 
 class Lamatic {
   name: string = "Lamatic SDK";
@@ -39,6 +39,134 @@ class Lamatic {
 
 
   /**
+   * Execute a workflow and stream the response via Server-Sent Events.
+   * @param {string} flowId - The ID of the workflow to execute
+   * @param {Object} payload - The payload to pass to the workflow
+   * @yields {LamaticStreamChunk} Chunks of the streaming response
+   */
+  async *executeFlowStream(
+    flowId: string,
+    payload: Object
+  ): AsyncGenerator<LamaticStreamChunk> {
+    const graphqlQuery = {
+      query: `query ExecuteWorkflow(
+              $workflowId: String!
+              $payload: JSON!
+            ) {
+              executeWorkflow(
+                workflowId: $workflowId
+                payload: $payload
+              ) {
+                status
+                result
+              }
+            }`,
+      variables: {
+        workflowId: flowId,
+        payload,
+      },
+    };
+
+    const headers = {
+      ...this.getHeaders(),
+      "Accept": "text/event-stream",
+    };
+
+    try {
+      const response = await fetch(this.endpoint, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(graphqlQuery),
+      });
+
+      const contentType = response.headers.get("content-type") ?? "";
+
+      if (!contentType.includes("text/event-stream")) {
+        // Server returned a regular JSON response — yield it as a single chunk
+        const text = await response.text();
+        const responseData: LamaticAPIResponse = JSON.parse(text);
+        if (responseData.errors) {
+          yield { event: "error", message: responseData.errors[0].message, done: false };
+          return;
+        }
+        yield { event: "data", data: responseData.data.executeWorkflow.result, done: false };
+        yield { event: "done", done: true };
+        return;
+      }
+
+      if (!response.body) {
+        yield { event: "error", message: "Response body is empty", done: false };
+        return;
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (trimmed === "" || trimmed.startsWith(":")) continue;
+
+            if (trimmed.startsWith("data:")) {
+              const raw = trimmed.slice(5).trimStart();
+              if (raw === "[DONE]") {
+                yield { event: "done", done: true };
+                return;
+              }
+              try {
+                const parsed = JSON.parse(raw);
+                yield { ...parsed, done: false };
+              } catch {
+                yield { event: "data", data: raw, done: false };
+              }
+            }
+          }
+        }
+        yield { event: "done", done: true };
+      } finally {
+        reader.releaseLock();
+      }
+    } catch (error: Error | any) {
+      console.error("[Lamatic SDK Error] : ", error.message);
+      yield { event: "error", message: error.message, done: false };
+    }
+  }
+
+  /**
+   * Execute a workflow and automatically poll for completion if an async
+   * @param {string} flowId - The ID of the workflow to execute
+   * @param {Object} payload - The payload to pass to the workflow
+   * @param {PollOptions} [pollOptions] - Optional polling configuration
+   * @returns {Promise<LamaticResponse>} The final response after polling
+   */
+  async executeFlowPoll(
+    flowId: string,
+    payload: Object,
+    pollOptions: PollOptions = {}
+  ): Promise<LamaticResponse> {
+    const response = await this.executeFlow(flowId, payload);
+
+    if (response.requestId) {
+      return this.checkStatus(
+        response.requestId,
+        pollOptions.interval ?? 15,
+        pollOptions.timeout ?? 900
+      );
+    }
+
+    return response;
+  }
+
+  /**
    * Execute a workflow with the given flow ID and payload
    * @param {string} flowId - The ID of the workflow to execute
    * @param {Object} payload - The payload to pass to the workflow
@@ -49,18 +177,18 @@ class Lamatic {
 
       const graphqlQuery = {
         query: `query ExecuteWorkflow(
-                $workflowId: String!  
+                $workflowId: String!
                 $payload: JSON!
-              ) 
-              {   
-                executeWorkflow( 
-                  workflowId: $workflowId   
+              )
+              {
+                executeWorkflow(
+                  workflowId: $workflowId
                   payload: $payload
-                ) 
-                {  
-                  status       
-                  result   
-                } 
+                )
+                {
+                  status
+                  result
+                }
               }`,
         variables: {
           workflowId: flowId,
@@ -74,7 +202,7 @@ class Lamatic {
         headers: headers,
         body: JSON.stringify(graphqlQuery),
       };
-      
+
       const response = await fetch(this.endpoint, options);
       const responseText = await response.text();
       let responseData : LamaticAPIResponse = JSON.parse(responseText);
@@ -86,68 +214,9 @@ class Lamatic {
           statusCode: response.status
         }
       }
-      
+
       return {
         ...responseData.data.executeWorkflow,
-        statusCode: response.status
-      };
-
-    } catch (error : Error | any) {
-      console.error("[Lamatic SDK Error] : ", error.message);
-      throw new Error(error.message);
-    }
-  }
-
-  /**
-   * Execute a workflow with the given flow ID and payload
-   * @param {string} agentId - The ID of the agent to execute
-   * @param {Object} payload - The payload to pass to the workflow
-   * @returns {Promise<LamaticResponse>} The response from the workflow
-   */
-  async executeAgent(agentId : string, payload : Object): Promise<LamaticResponse> {
-    try {
-
-      const graphqlQuery = {
-        query: `query ExecuteAgent(
-                $agentId: String!  
-                $payload: JSON!
-              ) 
-              {   
-                executeAgent( 
-                  agentId: $agentId   
-                  payload: $payload
-                ) 
-                {  
-                  status       
-                  result   
-                } 
-              }`,
-        variables: {
-          agentId: agentId,
-          payload : payload,
-        },
-      };
-
-      const headers = this.getHeaders();
-      const options = {
-        method: "POST",
-        headers: headers,
-        body: JSON.stringify(graphqlQuery),
-      };
-      
-      const response = await fetch(this.endpoint, options);
-      const responseText = await response.text();
-      let responseData : LamaticAPIResponse = JSON.parse(responseText);
-      if (responseData.errors) {
-        return {
-          status: "error",
-          result: null,
-          message: responseData.errors[0].message,
-          statusCode: response.status
-        }
-      }
-      return {
-        ...responseData.data.executeAgent,
         statusCode: response.status
       };
 
@@ -194,11 +263,11 @@ class Lamatic {
           headers: headers,
           body: JSON.stringify(graphqlQuery),
         };
-        
+
         const response = await fetch(this.endpoint, options);
         const responseText = await response.text();
         let responseData: LamaticAPIResponse = JSON.parse(responseText);
-        
+
         if (responseData.errors) {
           return {
             status: "error",
@@ -207,18 +276,16 @@ class Lamatic {
             statusCode: response.status
           };
         }
-        
+
         const statusResult = {
           ...responseData.data.checkStatus,
           statusCode: response.status
         };
 
-        // If the status indicates completion (success or error), return immediately
         if (statusResult.status === "success" || statusResult.status === "error" || statusResult.status === "failed") {
           return statusResult;
         }
 
-        // If still in progress, wait for the next poll interval
         if (Date.now() - startTime + intervalMs < timeoutMs) {
           await new Promise(resolve => setTimeout(resolve, intervalMs));
         }
@@ -234,7 +301,6 @@ class Lamatic {
       }
     }
 
-    // Timeout reached
     return {
       status: "error",
       result: null,
@@ -260,7 +326,7 @@ class Lamatic {
       "Content-Type" : "application/json",
       "Authorization": `Bearer ${this.apiKey}`,
       "x-project-id": this.projectId
-    };  
+    };
   }
 
   /**
