@@ -1,4 +1,28 @@
-import { LamaticConfig, LamaticAPIResponse, LamaticResponse, LamaticStreamChunk, PollOptions } from "./types";
+import {
+  LamaticConfig,
+  LamaticAPIResponse,
+  LamaticResponse,
+  LamaticStreamChunk,
+  LamaticRawStreamChunk,
+  LamaticStreamOptions,
+  LamaticTokenEvent,
+  PollOptions,
+} from "./types";
+
+/** The `executeWorkflowWithStream` field returns a `JSON!` scalar, so it takes no selection set. */
+const STREAM_SUBSCRIPTION = `subscription ExecuteWorkflowWithStream(
+              $workflowId: String
+              $payload: JSON!
+              $source: String
+              $command: String
+            ) {
+              executeWorkflowWithStream(
+                workflowId: $workflowId
+                payload: $payload
+                source: $source
+                command: $command
+              )
+            }`;
 
 class Lamatic {
   name: string = "Lamatic SDK";
@@ -37,108 +61,282 @@ class Lamatic {
     this.accessToken = config.accessToken;
   }
 
+  /**
+   * Execute a workflow and stream its LLM/RAG output one token at a time.
+   *
+   * Opens the `executeWorkflowWithStream` GraphQL subscription over Server-Sent
+   * Events and yields a typed event per frame:
+   *
+   *  - `token` — one text delta from a streaming node (LLM or RAG)
+   *  - `node`  — a node finished; `output` holds its full output
+   *  - `final` — the flow finished; `result` is its output and `text` is every
+   *              token concatenated
+   *  - `error` — execution failed; the stream ends if the failure was fatal
+   *
+   * Only LLM and RAG nodes stream token by token. Every other node reports once,
+   * as a single `node` event when it completes.
+   *
+   * Prefer the accumulated `text` on the `final` event over reading
+   * `generatedResponse` off a node's output: the platform currently returns that
+   * field with its content duplicated, and a flow's final result often carries
+   * only what its response node was configured to return.
+   *
+   * @param {string} flowId - The ID of the workflow to execute
+   * @param {Object} payload - The payload to pass to the workflow
+   * @param {LamaticStreamOptions} [options] - Abort signal and trigger source overrides
+   * @yields {LamaticTokenEvent} One event per stream frame
+   *
+   * @example
+   * for await (const event of lamatic.executeFlowTokenStream(flowId, { sampleInput: "Hello" })) {
+   *   if (event.type === "token") process.stdout.write(event.token);
+   *   if (event.type === "final") console.log("\n", event.text);
+   *   if (event.type === "error") console.error(event.message);
+   * }
+   */
+  async *executeFlowTokenStream(
+    flowId: string,
+    payload: Object,
+    options: LamaticStreamOptions = {}
+  ): AsyncGenerator<LamaticTokenEvent> {
+    let text = "";
+    const textByNode: Record<string, string> = {};
+
+    try {
+      for await (const chunk of this.streamSubscription(flowId, payload, options)) {
+        const nodeId = chunk.nodeId;
+
+        if (chunk.status === "error") {
+          const body = chunk.data ?? chunk.result ?? {};
+          yield {
+            type: "error",
+            message: body.errorMsg ?? "Workflow execution failed",
+            nodeId,
+            raw: chunk,
+          };
+          if (chunk.isFlowExecutionFinished) return;
+          continue;
+        }
+
+        // A token frame: `status: "streaming"` with a single delta in `data`.
+        if (chunk.status === "streaming" && !chunk.isNodeExecutionFinished) {
+          const token = chunk.data?.generatedResponse;
+          if (typeof token === "string" && token !== "") {
+            text += token;
+            if (nodeId) {
+              textByNode[nodeId] = (textByNode[nodeId] ?? "") + token;
+            }
+            yield { type: "token", token, nodeId, raw: chunk };
+          }
+          continue;
+        }
+
+        // Checked before `isNodeExecutionFinished`: the terminal frame can set both.
+        if (chunk.isFlowExecutionFinished) {
+          yield {
+            type: "final",
+            result: chunk.data ?? chunk.result ?? null,
+            text,
+            textByNode,
+            raw: chunk,
+          };
+          return;
+        }
+
+        if (chunk.isNodeExecutionFinished) {
+          yield { type: "node", nodeId, output: chunk.data ?? null, raw: chunk };
+        }
+      }
+    } catch (error: Error | any) {
+      // A caller-initiated abort ends the stream quietly rather than as a failure.
+      if (error?.name === "AbortError") return;
+      console.error("[Lamatic SDK Error] : ", error.message);
+      yield { type: "error", message: error.message };
+    }
+  }
 
   /**
    * Execute a workflow and stream the response via Server-Sent Events.
+   *
+   * Thin wrapper over {@link executeFlowTokenStream} kept for backwards
+   * compatibility. New code should use `executeFlowTokenStream`, which reports
+   * per-node output and the accumulated text.
+   *
    * @param {string} flowId - The ID of the workflow to execute
    * @param {Object} payload - The payload to pass to the workflow
+   * @param {LamaticStreamOptions} [options] - Abort signal and trigger source overrides
    * @yields {LamaticStreamChunk} Chunks of the streaming response
    */
   async *executeFlowStream(
     flowId: string,
-    payload: Object
+    payload: Object,
+    options: LamaticStreamOptions = {}
   ): AsyncGenerator<LamaticStreamChunk> {
+    for await (const event of this.executeFlowTokenStream(flowId, payload, options)) {
+      switch (event.type) {
+        case "token":
+          yield { event: "data", data: event.token, done: false };
+          break;
+        case "error":
+          yield { event: "error", message: event.message, done: false };
+          break;
+        case "final":
+          yield { event: "result", data: event.result, done: false };
+          yield { event: "done", done: true };
+          return;
+      }
+    }
+  }
+
+  /**
+   * Open the streaming subscription and yield each frame, unwrapped from its
+   * GraphQL envelope. Ends after the frame with `isFlowExecutionFinished: true`.
+   * @param {string} flowId - The ID of the workflow to execute
+   * @param {Object} payload - The payload to pass to the workflow
+   * @param {LamaticStreamOptions} options - Abort signal and trigger source overrides
+   * @yields {LamaticRawStreamChunk} One chunk per SSE frame
+   */
+  private async *streamSubscription(
+    flowId: string,
+    payload: Object,
+    options: LamaticStreamOptions
+  ): AsyncGenerator<LamaticRawStreamChunk> {
     const graphqlQuery = {
-      query: `query ExecuteWorkflow(
-              $workflowId: String!
-              $payload: JSON!
-            ) {
-              executeWorkflow(
-                workflowId: $workflowId
-                payload: $payload
-              ) {
-                status
-                result
-              }
-            }`,
+      query: STREAM_SUBSCRIPTION,
       variables: {
         workflowId: flowId,
-        payload,
+        payload: payload,
+        source: options.source,
+        command: options.command,
       },
     };
 
-    const headers = {
-      ...this.getHeaders(),
-      "Accept": "text/event-stream",
-    };
+    const response = await fetch(this.endpoint, {
+      method: "POST",
+      headers: {
+        ...this.getHeaders(),
+        "Accept": "text/event-stream",
+      },
+      body: JSON.stringify(graphqlQuery),
+      signal: options.signal,
+    });
+
+    const contentType = response.headers.get("content-type") ?? "";
+
+    // Auth failures, rate limits and query-validation errors come back as plain JSON.
+    if (!contentType.includes("text/event-stream")) {
+      yield this.chunkFromJsonResponse(await response.text(), response.status);
+      return;
+    }
+
+    if (!response.body) {
+      yield {
+        status: "error",
+        data: { errorMsg: "Response body is empty" },
+        isFlowExecutionFinished: true,
+      };
+      return;
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
 
     try {
-      const response = await fetch(this.endpoint, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(graphqlQuery),
-      });
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
 
-      const contentType = response.headers.get("content-type") ?? "";
+        buffer += decoder.decode(value, { stream: true });
+        // SSE separates events with a blank line.
+        const frames = buffer.replace(/\r\n/g, "\n").split("\n\n");
+        buffer = frames.pop() ?? "";
 
-      if (!contentType.includes("text/event-stream")) {
-        // Server returned a regular JSON response — yield it as a single chunk
-        const text = await response.text();
-        const responseData: LamaticAPIResponse = JSON.parse(text);
-        if (responseData.errors) {
-          yield { event: "error", message: responseData.errors[0].message, done: false };
-          return;
-        }
-        yield { event: "data", data: responseData.data.executeWorkflow.result, done: false };
-        yield { event: "done", done: true };
-        return;
-      }
+        for (const frame of frames) {
+          const envelope = this.parseFrame(frame);
+          if (envelope === undefined) continue;
 
-      if (!response.body) {
-        yield { event: "error", message: "Response body is empty", done: false };
-        return;
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() ?? "";
-
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (trimmed === "" || trimmed.startsWith(":")) continue;
-
-            if (trimmed.startsWith("data:")) {
-              const raw = trimmed.slice(5).trimStart();
-              if (raw === "[DONE]") {
-                yield { event: "done", done: true };
-                return;
-              }
-              try {
-                const parsed = JSON.parse(raw);
-                yield { ...parsed, done: false };
-              } catch {
-                yield { event: "data", data: raw, done: false };
-              }
-            }
+          if (envelope.errors?.length) {
+            yield {
+              status: "error",
+              data: { errorMsg: envelope.errors[0].message },
+              isFlowExecutionFinished: true,
+            };
+            return;
           }
+
+          const chunk = envelope.data?.executeWorkflowWithStream;
+          // The server also emits frames with a null payload; nothing to report.
+          if (chunk === undefined || chunk === null) continue;
+
+          yield chunk;
+          if (chunk.isFlowExecutionFinished) return;
         }
-        yield { event: "done", done: true };
-      } finally {
-        reader.releaseLock();
       }
-    } catch (error: Error | any) {
-      console.error("[Lamatic SDK Error] : ", error.message);
-      yield { event: "error", message: error.message, done: false };
+    } finally {
+      // Releases the connection when the caller breaks out of the loop early.
+      await reader.cancel().catch(() => undefined);
     }
+  }
+
+  /**
+   * Parse one SSE frame into its JSON payload, joining multi-line `data:` fields.
+   * @param {string} frame - A single SSE frame
+   * @returns {any | undefined} The parsed payload, or undefined when the frame carries no data
+   */
+  private parseFrame(frame: string): any | undefined {
+    const dataLines: string[] = [];
+    for (const line of frame.split("\n")) {
+      // `:` prefixes a comment, used for keep-alives.
+      if (line.startsWith(":")) continue;
+      if (line.startsWith("data:")) {
+        dataLines.push(line.slice(5).replace(/^ /, ""));
+      }
+    }
+    if (dataLines.length === 0) return undefined;
+
+    const raw = dataLines.join("\n");
+    if (raw === "[DONE]") {
+      return { data: { executeWorkflowWithStream: { isFlowExecutionFinished: true } } };
+    }
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * Build a terminal chunk from a non-streaming response body.
+   * @param {string} body - The raw response body
+   * @param {number} statusCode - The HTTP status code
+   * @returns {LamaticRawStreamChunk} A chunk marked as the end of the flow
+   */
+  private chunkFromJsonResponse(body: string, statusCode: number): LamaticRawStreamChunk {
+    let parsed: any;
+    try {
+      parsed = JSON.parse(body);
+    } catch {
+      return {
+        status: "error",
+        data: { errorMsg: `Unexpected non-streaming response (HTTP ${statusCode})` },
+        isFlowExecutionFinished: true,
+      };
+    }
+
+    if (parsed?.errors?.length) {
+      return {
+        status: "error",
+        data: { errorMsg: parsed.errors[0].message },
+        isFlowExecutionFinished: true,
+      };
+    }
+
+    const result = parsed?.data?.executeWorkflowWithStream ?? parsed?.data?.executeWorkflow;
+    return {
+      status: result?.status ?? "success",
+      data: result?.result ?? result ?? null,
+      isFlowExecutionFinished: true,
+    };
   }
 
   /**

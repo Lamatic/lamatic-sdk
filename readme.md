@@ -98,6 +98,102 @@ async function main() {
 main();
 ```
 
+## Token Streaming
+
+`executeFlowTokenStream` runs a flow and yields its LLM/RAG output one token at a time, so you can render text as it is generated instead of waiting for the whole flow to finish.
+
+```typescript
+for await (const event of lamatic.executeFlowTokenStream(flowId, { sampleInput: "Hello" })) {
+  switch (event.type) {
+    case "token":
+      process.stdout.write(event.token);   // one text delta
+      break;
+    case "node":
+      console.log(`\n[${event.nodeId}] finished`, event.output);
+      break;
+    case "final":
+      console.log("\nFull text:", event.text);
+      console.log("Flow result:", event.result);
+      break;
+    case "error":
+      console.error("\nStream failed:", event.message);
+      break;
+  }
+}
+```
+
+### Events
+
+| `type` | Fields | Emitted when |
+|---|---|---|
+| `token` | `token`, `nodeId`, `raw` | An LLM or RAG node produces a text delta |
+| `node` | `nodeId`, `output`, `raw` | Any node finishes; `output` is its full output |
+| `final` | `result`, `text`, `textByNode`, `raw` | The flow finishes — always the last event |
+| `error` | `message`, `nodeId?`, `raw?` | Execution failed; the stream ends if the failure was fatal |
+
+Every event carries `raw`, the untouched server frame, if you need fields the typed event does not expose — such as `_meta` on a `node` event, which holds token counts and cost:
+
+```typescript
+if (event.type === "node" && event.raw.data?._meta) {
+  const { total_tokens, total_cost, model_name } = event.raw.data._meta;
+  console.log(`${model_name}: ${total_tokens} tokens, $${total_cost}`);
+}
+```
+
+### Reading the generated text
+
+Use `final.text` — every token concatenated in arrival order. Two reasons not to read `generatedResponse` off a node's output instead:
+
+- A flow's final `result` contains only what its response node was configured to return, which often does not include the generated text at all.
+- The platform currently returns a streaming node's `generatedResponse` with its content duplicated. `final.text` is built from the deltas, so it is correct.
+
+For a flow with more than one streaming node, `final.textByNode` keys the text by node ID.
+
+### Which nodes stream
+
+Only **LLM** and **RAG** nodes emit `token` events. Every other node reports once, as a single `node` event when it completes.
+
+### Cancelling a stream
+
+Pass an `AbortSignal` to stop generation — useful for a "stop" button. The generator returns quietly; it does not throw or emit a `final` event.
+
+```typescript
+const controller = new AbortController();
+stopButton.onclick = () => controller.abort();
+
+for await (const event of lamatic.executeFlowTokenStream(
+  flowId,
+  { sampleInput: "Write a long story" },
+  { signal: controller.signal }
+)) {
+  if (event.type === "token") process.stdout.write(event.token);
+}
+```
+
+### React example
+
+```tsx
+const [text, setText] = useState("");
+const [isStreaming, setIsStreaming] = useState(false);
+
+async function send(prompt: string) {
+  setText("");
+  setIsStreaming(true);
+  try {
+    for await (const event of lamatic.executeFlowTokenStream(flowId, { sampleInput: prompt })) {
+      if (event.type === "token") setText((prev) => prev + event.token);
+      if (event.type === "error") console.error(event.message);
+    }
+  } finally {
+    setIsStreaming(false);
+  }
+}
+```
+
+### `executeFlowStream`
+
+The older `executeFlowStream` still works and now streams correctly, yielding `{ event, data, message, done }` chunks where `event` is one of `data` (a token), `result`, `error` or `done`. New code should prefer `executeFlowTokenStream`, which also reports per-node output and the accumulated text.
+
 ## Executing Agents
 
 In addition to executing flows, another key functionality of the SDK is to execute agents that you've created on the Lamatic platform.
