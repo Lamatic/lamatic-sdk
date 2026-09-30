@@ -41,29 +41,33 @@ async function testSDK() {
   }
   console.log("");
 
-  // Test 2: executeFlowStream (streaming — default recommended method)
-  console.log("🌊 Test 2: executeFlowStream (streaming)");
+  // Test 2: executeFlowTokenStream (token streaming — recommended for LLM/RAG flows)
+  console.log("\u{1F30A} Test 2: executeFlowTokenStream (token streaming)");
   try {
     const flowId = "your-flow-id";
-    const payload = { question: "Stream a short story about a robot learning to cook" };
+    const payload = { sampleInput: "Stream a short story about a robot learning to cook" };
 
     console.log(`   Flow ID: ${flowId}`);
     console.log(`   Payload:`, payload);
-    console.log("   Streaming chunks:");
+    console.log("   Streaming tokens:");
 
-    for await (const chunk of lamatic.executeFlowStream(flowId, payload)) {
-      if (chunk.event === "error") {
-        console.error("   ❌ Stream error:", chunk.message);
-        break;
+    let tokenCount = 0;
+    for await (const event of lamatic.executeFlowTokenStream(flowId, payload)) {
+      if (event.type === "token") {
+        tokenCount++;
+        process.stdout.write(event.token);
+      } else if (event.type === "node") {
+        console.log(`\n   \u2713 node ${event.nodeId} finished`);
+      } else if (event.type === "final") {
+        console.log(`\n   \u2705 Stream complete — ${tokenCount} tokens`);
+        console.log("   Full text:", event.text);
+        console.log("   Flow result:", JSON.stringify(event.result));
+      } else if (event.type === "error") {
+        console.error("   \u274C Stream error:", event.message);
       }
-      if (chunk.event === "done") {
-        console.log("   ✅ Stream complete");
-        break;
-      }
-      process.stdout.write(`   chunk: ${JSON.stringify(chunk)}\n`);
     }
   } catch (error) {
-    console.error("❌ Flow stream failed:", error.message);
+    console.error("\u274C Token stream failed:", error.message);
   }
   console.log("");
 
