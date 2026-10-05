@@ -53,6 +53,26 @@ async def run_flow_async():
     print("Result:", response.result)
     print("Message:", response.message)
 
+# Token streaming (sync)
+
+def stream_flow():
+    for event in lamatic.execute_flow_token_stream("flowid", {"sampleInput": "Tell me a story"}):
+        if event.type == "token":
+            print(event.token, end="", flush=True)
+        elif event.type == "final":
+            print("\nFull text:", event.text)
+        elif event.type == "error":
+            print("\nStream failed:", event.message)
+
+# Token streaming (async)
+
+async def stream_flow_async():
+    async for event in lamatic.async_execute_flow_token_stream("flowid", {"sampleInput": "Tell me a story"}):
+        if event.type == "token":
+            print(event.token, end="", flush=True)
+        elif event.type == "error":
+            print("\nStream failed:", event.message)
+
 # Token refresh
 
 def refresh_token():
