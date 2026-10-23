@@ -153,6 +153,10 @@ For a flow with more than one streaming node, `final.textByNode` keys the text b
 
 Only **LLM** and **RAG** nodes emit `token` events. Every other node reports once, as a single `node` event when it completes.
 
+### Errors
+
+Failures (bad credentials, network errors, a stream that closes before the flow finishes) arrive as an `error` event rather than a thrown exception.
+
 ### Cancelling a stream
 
 Pass an `AbortSignal` to stop generation — useful for a "stop" button. The generator returns quietly; it does not throw or emit a `final` event.

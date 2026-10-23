@@ -8,19 +8,14 @@
   ],
   "scripts": {
     "build": "tsc",
-    "prepare": "npm run build"
+    "prepare": "npm run build",
+    "test": "npm run build && node --test test/*.test.js"
   },
   "author": "Lamatic",
   "license": "MIT",
   "description": "Lamatic AI SDK for TypeScript to execute flow",
-  "dependencies": {
-    "react": "^19.2.5",
-    "react-dom": "^19.2.5"
-  },
   "devDependencies": {
     "@types/node": "^22.13.0",
-    "@types/react": "^19.2.14",
-    "@types/react-dom": "^19.2.3",
     "typescript": "^5.8.3"
   },
   "type": "module"
