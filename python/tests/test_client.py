@@ -242,6 +242,21 @@ def test_token_stream_non_fatal_error_continues(client):
 
 
 @respx.mock
+def test_token_stream_tolerates_non_object_data(client):
+    chunks = [
+        {"status": "streaming", "nodeId": "llm", "data": "not an object"},
+        {"status": "error", "nodeId": "a", "data": "boom"},
+        STREAM_CHUNKS[2],
+        STREAM_CHUNKS[-1],
+    ]
+    respx.post(ENDPOINT).mock(return_value=_sse_response(_sse(*chunks)))
+    events = list(client.execute_flow_token_stream("flow-1", {}))
+    assert [e.type for e in events] == ["error", "token", "final"]
+    assert events[0].message == "Workflow execution failed"
+    assert events[-1].text == "lo"
+
+
+@respx.mock
 def test_token_stream_json_error_response(client):
     respx.post(ENDPOINT).mock(return_value=httpx.Response(
         200, json={"errors": [{"message": "Invalid API key"}]},
