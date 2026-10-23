@@ -152,7 +152,9 @@ class TokenEventAssembler:
         data = chunk.get("data")
 
         if chunk.get("status") == "error":
-            body = _first_not_none(data, chunk.get("result")) or {}
+            body = _first_not_none(data, chunk.get("result"))
+            if not isinstance(body, dict):
+                body = {}
             event = LamaticTokenEventError(
                 message=body.get("errorMsg") or "Workflow execution failed",
                 node_id=node_id,
@@ -164,7 +166,7 @@ class TokenEventAssembler:
 
         # A token frame: `status: "streaming"` with a single delta in `data`.
         if chunk.get("status") == "streaming" and not chunk.get("isNodeExecutionFinished"):
-            token = (data or {}).get("generatedResponse")
+            token = data.get("generatedResponse") if isinstance(data, dict) else None
             if isinstance(token, str) and token != "":
                 self._text.append(token)
                 if node_id:
