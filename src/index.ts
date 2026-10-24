@@ -146,6 +146,8 @@ class Lamatic {
           yield { type: "node", nodeId, output: chunk.data ?? null, raw: chunk };
         }
       }
+      // The connection closed without a terminal frame.
+      yield { type: "error", message: "Stream ended before the flow finished" };
     } catch (error: Error | any) {
       // A caller-initiated abort ends the stream quietly rather than as a failure.
       if (error?.name === "AbortError") return;
