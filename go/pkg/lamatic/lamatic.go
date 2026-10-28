@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/AasheeshLikePanner/lamatic-sdk-go/internal/client"
+	"github.com/Lamatic/lamatic-sdk-go/internal/client"
 )
 
 type Status string

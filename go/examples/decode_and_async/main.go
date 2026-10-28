@@ -6,7 +6,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/AasheeshLikePanner/lamatic-sdk-go/pkg/lamatic"
+	"github.com/Lamatic/lamatic-sdk-go/pkg/lamatic"
 )
 
 func main() {

@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/AasheeshLikePanner/lamatic-sdk-go/pkg/lamatic"
+	"github.com/Lamatic/lamatic-sdk-go/pkg/lamatic"
 )
 
 func TestLamaticBasic(t *testing.T) {

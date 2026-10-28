@@ -1,4 +1,4 @@
-module github.com/AasheeshLikePanner/lamatic-sdk-go
+module github.com/Lamatic/lamatic-sdk-go
 
 go 1.25.4
 

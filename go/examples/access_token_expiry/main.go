@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/AasheeshLikePanner/lamatic-sdk-go/pkg/lamatic"
+	"github.com/Lamatic/lamatic-sdk-go/pkg/lamatic"
 )
 
 func mockGetNewToken() string {
