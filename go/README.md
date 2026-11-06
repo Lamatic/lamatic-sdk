@@ -50,6 +50,34 @@ func main() {
 }
 ```
 
+## Async Flows
+
+A flow whose API trigger is set to run asynchronously answers at once with only a request ID (`Result` is `{"requestId": ...}`) and keeps running in the background.
+
+`ExecuteFlowPoll` runs a flow and, if it was queued, polls until it finishes. A realtime flow's response comes back unchanged, so it is safe to use for any flow. `ExecuteFlowPollAsync` reports the result on a channel instead.
+
+```go
+resp, err := client.ExecuteFlowPoll(ctx, "your-flow-id", payload, &lamatic.PollOptions{
+	Interval: 5 * time.Second, // default 15s
+	Timeout:  5 * time.Minute, // default 15m
+})
+if err != nil {
+	return err
+}
+if resp.Status == lamatic.StatusSuccess {
+	fmt.Println(resp.Result)
+} else {
+	fmt.Println(resp.Status, resp.Message)
+}
+```
+
+To poll a request ID you already hold, use `CheckStatus(ctx, requestId, opts)` or `CheckStatusAsync`. Pass `nil` options for the defaults. They return the same `Response`:
+
+- `success`: `Result` is the flow's output, the same shape a realtime run returns.
+- `failed`: `Message` is the run's error, and `Result["failedNode"]` names the node that failed.
+- `error` with `StatusCode` 404: the request ID was still unknown after 60 seconds of polling.
+- `error` with `StatusCode` 408: the run had not finished when `Timeout` ran out. It may still finish later.
+
 ## Token Streaming
 
 `ExecuteFlowTokenStream` runs a flow and streams its LLM/RAG output one token at a time, so you can render text as it is generated instead of waiting for the whole flow to finish. It returns a channel of `TokenEvent`s.
@@ -165,6 +193,7 @@ go-sdk/
 
 - Execute Workflows (Flows), synchronously or via `ExecuteFlowAsync`
 - Token-level streaming of LLM/RAG output with `ExecuteFlowTokenStream`
+- Run a flow and wait for an async result with `ExecuteFlowPoll`, synchronously or via `ExecuteFlowPollAsync`
 - Job Polling with `CheckStatus`, synchronously or via `CheckStatusAsync`
 - Decode results into your own structs with `Response.Decode`
 - Optional `Logger` hook on `Config` for observing request failures
