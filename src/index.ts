@@ -1,6 +1,7 @@
 import {
   LamaticConfig,
   LamaticAPIResponse,
+  LamaticCheckStatusResult,
   LamaticResponse,
   LamaticStreamChunk,
   LamaticRawStreamChunk,
@@ -30,6 +31,12 @@ class Lamatic {
   projectId: string = "";
   apiKey?: string | null | undefined;
   accessToken?: string | null | undefined;
+  /**
+   * How long `checkStatus` keeps polling a request reported as `not-found`.
+   * A run's record reaches the status store a moment after the run is queued,
+   * so a fresh request ID can briefly read as unknown.
+   */
+  private notFoundGraceMs: number = 60_000;
   /**
    * Constructor to initialize the Lamatic SDK with configuration options
    * @param {Object} config - Configuration object
@@ -342,7 +349,8 @@ class Lamatic {
   }
 
   /**
-   * Execute a workflow and automatically poll for completion if an async
+   * Execute a workflow and, if it runs asynchronously, poll until it finishes.
+   * A realtime flow's response is returned as is.
    * @param {string} flowId - The ID of the workflow to execute
    * @param {Object} payload - The payload to pass to the workflow
    * @param {PollOptions} [pollOptions] - Optional polling configuration
@@ -355,9 +363,10 @@ class Lamatic {
   ): Promise<LamaticResponse> {
     const response = await this.executeFlow(flowId, payload);
 
-    if (response.requestId) {
+    const requestId = queuedRequestId(response);
+    if (requestId) {
       return this.checkStatus(
-        response.requestId,
+        requestId,
         pollOptions.interval ?? 15,
         pollOptions.timeout ?? 900
       );
@@ -477,13 +486,19 @@ class Lamatic {
           };
         }
 
-        const statusResult = {
-          ...responseData.data.checkStatus,
-          statusCode: response.status
-        };
-
-        if (statusResult.status === "success" || statusResult.status === "error" || statusResult.status === "failed") {
+        const check = responseData.data.checkStatus;
+        const statusResult = responseFromCheckStatus(check, response.status);
+        if (statusResult) {
           return statusResult;
+        }
+
+        if (check?.status === "not-found" && Date.now() - startTime >= this.notFoundGraceMs) {
+          return {
+            status: "error",
+            result: null,
+            message: `Request ${requestId} was not found`,
+            statusCode: 404
+          };
         }
 
         if (Date.now() - startTime + intervalMs < timeoutMs) {
@@ -536,6 +551,48 @@ class Lamatic {
   updateAccessToken(accessToken : string) {
     this.accessToken = accessToken;
   }
+}
+
+/**
+ * The request ID of a run that was queued rather than executed. An async flow
+ * answers at once with `result: { requestId }` and nothing else; a realtime
+ * flow's result also carries `requestId`, but next to its own fields.
+ * @param {LamaticResponse} response - The `executeFlow` response
+ * @returns {string | undefined} The request ID to poll, if the run was queued
+ */
+function queuedRequestId(response: LamaticResponse): string | undefined {
+  const result = response.result;
+  if (response.status !== "success" || !result) return undefined;
+  const keys = Object.keys(result);
+  if (keys.length === 1 && keys[0] === "requestId" && typeof result.requestId === "string") {
+    return result.requestId;
+  }
+  return undefined;
+}
+
+/**
+ * Turn a finished `checkStatus` record into a `LamaticResponse`.
+ * @param {LamaticCheckStatusResult} check - The `checkStatus` payload
+ * @param {number} statusCode - The HTTP status code
+ * @returns {LamaticResponse | null} The response, or null while the run is still going
+ */
+function responseFromCheckStatus(
+  check: LamaticCheckStatusResult | null | undefined,
+  statusCode: number
+): LamaticResponse | null {
+  const status = check?.status;
+  if (status !== "success" && status !== "error" && status !== "failed") return null;
+
+  const result = check?.data?.output?.result ?? (check as any)?.result ?? null;
+  if (status === "success") {
+    return { status, result, statusCode };
+  }
+  return {
+    status,
+    result,
+    message: result?.errorMsg ?? check?.error ?? (check as any)?.message ?? "Workflow execution failed",
+    statusCode
+  };
 }
 
 export { Lamatic };
