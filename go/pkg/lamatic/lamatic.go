@@ -13,7 +13,10 @@ type Status string
 
 const (
 	StatusSuccess Status = "success"
-	StatusError   Status = "error"
+	// StatusError means the request itself failed.
+	StatusError Status = "error"
+	// StatusFailed means the flow ran and a node failed.
+	StatusFailed Status = "failed"
 )
 
 // Logger is satisfied by *log.Logger and lets callers plug in their own
@@ -239,21 +242,18 @@ func (c *Client) CheckStatus(ctx context.Context, requestId string, opts *PollOp
 		"requestId": requestId,
 	}
 
+	var lastErr error
+	timedOut := func() *Response {
+		message := fmt.Sprintf("Request checkStatus timed out or cancelled: %v", timeoutCtx.Err())
+		if lastErr != nil {
+			message += fmt.Sprintf(". Last error: %v", lastErr)
+		}
+		return &Response{Status: StatusError, Result: nil, Message: message, StatusCode: 408}
+	}
+
 	for {
 		resp, statusCode, err := c.httpClient.DoRequest(timeoutCtx, query, variables)
-		if err != nil {
-			if timeoutCtx.Err() != nil {
-				return &Response{
-					Status:     StatusError,
-					Result:     nil,
-					Message:    fmt.Sprintf("Request checkStatus timed out or cancelled: %v", timeoutCtx.Err()),
-					StatusCode: 408,
-				}, nil
-			}
-			return nil, err
-		}
-
-		if len(resp.Errors) > 0 {
+		if err == nil && len(resp.Errors) > 0 {
 			return &Response{
 				Status:     StatusError,
 				Result:     nil,
@@ -263,44 +263,48 @@ func (c *Client) CheckStatus(ctx context.Context, requestId string, opts *PollOp
 		}
 
 		var data checkStatusData
-		if err := json.Unmarshal(resp.Data, &data); err != nil {
-			return nil, err
+		if err == nil {
+			err = json.Unmarshal(resp.Data, &data)
 		}
 
-		check := &data.CheckStatus
-		switch check.Status {
-		case StatusSuccess:
-			return &Response{
-				Status:     StatusSuccess,
-				Result:     check.result(),
-				StatusCode: statusCode,
-			}, nil
-		case StatusError, "failed":
-			return &Response{
-				Status:     check.Status,
-				Result:     check.result(),
-				Message:    check.message(),
-				StatusCode: statusCode,
-			}, nil
-		case "not-found":
-			if time.Since(start) >= notFoundGrace {
+		if err != nil {
+			if timeoutCtx.Err() != nil {
+				return timedOut(), nil
+			}
+			// A dropped connection or a non-JSON reply (such as a gateway error
+			// page) is usually transient, so keep polling until the timeout.
+			lastErr = err
+		} else {
+			check := &data.CheckStatus
+			switch check.Status {
+			case StatusSuccess:
 				return &Response{
-					Status:     StatusError,
-					Result:     nil,
-					Message:    fmt.Sprintf("Request %s was not found", requestId),
-					StatusCode: 404,
+					Status:     StatusSuccess,
+					Result:     check.result(),
+					StatusCode: statusCode,
 				}, nil
+			case StatusError, StatusFailed:
+				return &Response{
+					Status:     check.Status,
+					Result:     check.result(),
+					Message:    check.message(),
+					StatusCode: statusCode,
+				}, nil
+			case "not-found":
+				if time.Since(start) >= notFoundGrace {
+					return &Response{
+						Status:     StatusError,
+						Result:     nil,
+						Message:    fmt.Sprintf("Request %s was not found", requestId),
+						StatusCode: 404,
+					}, nil
+				}
 			}
 		}
 
 		select {
 		case <-timeoutCtx.Done():
-			return &Response{
-				Status:     StatusError,
-				Result:     nil,
-				Message:    fmt.Sprintf("Request checkStatus timed out or cancelled: %v", timeoutCtx.Err()),
-				StatusCode: 408,
-			}, nil
+			return timedOut(), nil
 		case <-ticker.C:
 		}
 	}

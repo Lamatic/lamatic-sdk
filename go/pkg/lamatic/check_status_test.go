@@ -84,7 +84,7 @@ func TestCheckStatusReportsAFailedRunsMessage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if resp.Status != "failed" || !strings.HasPrefix(resp.Message, "LLM node failed: 404") {
+	if resp.Status != StatusFailed || !strings.HasPrefix(resp.Message, "LLM node failed: 404") {
 		t.Fatalf("got %+v", resp)
 	}
 }
@@ -146,5 +146,49 @@ func TestExecuteFlowPollReturnsARealtimeResponseWithoutPolling(t *testing.T) {
 	}
 	if result.Response.Result["answer"] != "now" {
 		t.Fatalf("got %+v", result.Response)
+	}
+}
+
+func TestCheckStatusKeepsPollingThroughABadReply(t *testing.T) {
+	fixtures := loadFixtures(t)
+	var calls int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if calls == 1 {
+			// A gateway error page rather than JSON.
+			w.WriteHeader(http.StatusBadGateway)
+			w.Write([]byte("<html>Bad gateway</html>"))
+			return
+		}
+		w.Write(fixtures["success"])
+	}))
+	defer server.Close()
+	apiKey := "test-key"
+	client, _ := NewClient(Config{Endpoint: server.URL, ProjectID: "test-project", APIKey: &apiKey})
+
+	resp, err := client.CheckStatus(context.Background(), "req-1", fast)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.Status != StatusSuccess || calls != 2 {
+		t.Fatalf("got %+v after %d calls", resp, calls)
+	}
+}
+
+func TestCheckStatusReportsTheLastErrorOnTimeout(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+		w.Write([]byte("<html>Bad gateway</html>"))
+	}))
+	defer server.Close()
+	apiKey := "test-key"
+	client, _ := NewClient(Config{Endpoint: server.URL, ProjectID: "test-project", APIKey: &apiKey})
+
+	resp, err := client.CheckStatus(context.Background(), "req-1", &PollOptions{Interval: 10 * time.Millisecond, Timeout: 50 * time.Millisecond})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != 408 || !strings.Contains(resp.Message, "Last error:") {
+		t.Fatalf("got %+v", resp)
 	}
 }
