@@ -2,7 +2,8 @@ from dataclasses import dataclass, field
 from typing import Any, Literal, Union
 
 
-LamaticStatus = Literal["success", "error", "failed", "in_progress"]
+# "failed" means the flow ran and a node failed; "error" means the request itself failed.
+LamaticStatus = Literal["success", "error", "failed"]
 
 
 @dataclass

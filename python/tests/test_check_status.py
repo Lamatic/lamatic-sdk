@@ -108,3 +108,28 @@ async def test_async_check_status_reports_a_failed_run(client):
     result = await client.async_check_status("req-1", poll_interval=0.01, poll_timeout=5)
     assert result.status == "failed"
     assert result.message.startswith("LLM node failed: 404")
+
+
+@respx.mock
+def test_check_status_keeps_polling_through_a_dropped_connection(client):
+    replies = iter([httpx.ConnectError("connection reset"), httpx.Response(200, json=FIXTURES["success"])])
+
+    def reply(request):
+        r = next(replies)
+        if isinstance(r, Exception):
+            raise r
+        return r
+
+    route = respx.post(ENDPOINT).mock(side_effect=reply)
+    result = client.check_status("req-1", poll_interval=0.01, poll_timeout=5)
+    assert result.status == "success"
+    assert route.call_count == 2
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_async_check_status_reports_the_last_error_on_timeout(client):
+    respx.post(ENDPOINT).mock(return_value=httpx.Response(502, text="<html>Bad gateway</html>"))
+    result = await client.async_check_status("req-1", poll_interval=0.01, poll_timeout=0.05)
+    assert result.status_code == 408
+    assert "Last error:" in result.message

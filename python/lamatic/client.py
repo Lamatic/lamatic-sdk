@@ -234,6 +234,7 @@ class Lamatic:
             "variables": {"requestId": request_id},
         }
         start = time.monotonic()
+        last_error = None
         while time.monotonic() - start < poll_timeout:
             try:
                 with httpx.Client(timeout=self.timeout) as client:
@@ -242,20 +243,17 @@ class Lamatic:
                 if result is not None:
                     return result
             except Exception as e:
+                # A dropped connection or a non-JSON reply (such as a gateway
+                # error page) is usually transient, so keep polling until the timeout.
                 logger.error("checkStatus request failed: %s", e)
-                return LamaticResponse(status="error", result=None, message=str(e), status_code=500)
+                last_error = str(e)
 
             remaining = poll_timeout - (time.monotonic() - start)
             if remaining <= 0:
                 break
             time.sleep(min(poll_interval, remaining))
 
-        return LamaticResponse(
-            status="error",
-            result=None,
-            message=f"Request checkStatus timed out after {poll_timeout} seconds, your request may still be executing in the background.",
-            status_code=408,
-        )
+        return _timed_out(poll_timeout, last_error)
 
     def execute_flow_poll(
         self,
@@ -367,6 +365,7 @@ class Lamatic:
             "variables": {"requestId": request_id},
         }
         start = time.monotonic()
+        last_error = None
         while time.monotonic() - start < poll_timeout:
             try:
                 async with httpx.AsyncClient(timeout=self.timeout) as client:
@@ -375,20 +374,17 @@ class Lamatic:
                 if result is not None:
                     return result
             except Exception as e:
+                # A dropped connection or a non-JSON reply (such as a gateway
+                # error page) is usually transient, so keep polling until the timeout.
                 logger.error("checkStatus request failed: %s", e)
-                return LamaticResponse(status="error", result=None, message=str(e), status_code=500)
+                last_error = str(e)
 
             remaining = poll_timeout - (time.monotonic() - start)
             if remaining <= 0:
                 break
             await asyncio.sleep(min(poll_interval, remaining))
 
-        return LamaticResponse(
-            status="error",
-            result=None,
-            message=f"Request checkStatus timed out after {poll_timeout} seconds, your request may still be executing in the background.",
-            status_code=408,
-        )
+        return _timed_out(poll_timeout, last_error)
 
     async def async_execute_flow_poll(
         self,
@@ -403,6 +399,13 @@ class Lamatic:
         if request_id:
             return await self.async_check_status(request_id, poll_interval, poll_timeout)
         return response
+
+
+def _timed_out(poll_timeout: float, last_error: str | None) -> LamaticResponse:
+    message = f"Request checkStatus timed out after {poll_timeout} seconds, your request may still be executing in the background."
+    if last_error:
+        message += f" Last error: {last_error}"
+    return LamaticResponse(status="error", result=None, message=message, status_code=408)
 
 
 def _queued_request_id(response: LamaticResponse) -> str | None:
