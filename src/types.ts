@@ -14,9 +14,28 @@ export type LamaticStatus = "success" | "error" | "pending" | "processing" | "fa
 export interface LamaticAPIResponse {
     data: {
         executeWorkflow: LamaticResponse;
-        checkStatus: LamaticResponse;
+        checkStatus: LamaticCheckStatusResult;
     }
     errors?: Error[];
+}
+
+/**
+ * What the `checkStatus` query returns. It is a JSON scalar holding the run's
+ * log record, not a `LamaticResponse`: the flow's result sits at
+ * `data.output.result`, and a failed run's message at `data.output.result.errorMsg`.
+ */
+export interface LamaticCheckStatusResult {
+    success?: boolean;
+    status: "in-progress" | "success" | "failed" | "not-found" | string;
+    data?: {
+        input?: Record<string, any>;
+        output?: {
+            result?: Record<string, any> | null;
+            tokensInfo?: Record<string, number>;
+        };
+        timeTakenInSeconds?: number;
+    };
+    error?: string;
 }
 
 export interface LamaticResponse {

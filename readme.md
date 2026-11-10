@@ -198,29 +198,35 @@ async function send(prompt: string) {
 
 The older `executeFlowStream` still works and now streams correctly, yielding `{ event, data, message, done }` chunks where `event` is one of `data` (a token), `result`, `error` or `done`. New code should prefer `executeFlowTokenStream`, which also reports per-node output and the accumulated text.
 
-## Executing Agents
+## Async Flows
 
-In addition to executing flows, another key functionality of the SDK is to execute agents that you've created on the Lamatic platform.
+A flow whose API trigger is set to run asynchronously answers at once with only a request ID (`result: { requestId }`) and keeps running in the background.
 
-### Basic Example
+`executeFlowPoll` runs a flow and, if it was queued, polls until it finishes. A realtime flow's response comes back unchanged, so it is safe to use for any flow:
 
 ```typescript
-async function main() {
-  const agentId = "your-agent-id";
-  // sample payload
-  const payload = {
-    prompt: "hey, how are you?"
-  }
-  try {
-    const response = await lamatic.executeAgent(agentId, payload);
-    console.log(response);
-  } catch (error) {
-    console.error(error);
-  }
-}
+const response = await lamatic.executeFlowPoll(flowId, payload, {
+  interval: 5,   // seconds between checks (default 15)
+  timeout: 300,  // give up after this many seconds (default 900)
+});
 
-main();
+if (response.status === "success") {
+  console.log(response.result);
+} else {
+  console.error(response.status, response.message);
+}
 ```
+
+To poll a request ID you already hold, use `checkStatus(requestId, pollInterval?, pollTimeout?)`. It resolves to the same `LamaticResponse`:
+
+- `success`: `result` is the flow's output, the same shape a realtime run returns.
+- `failed`: `message` is the run's error, and `result.failedNode` names the node that failed.
+- `error` with `statusCode: 404`: the request ID was still unknown after 60 seconds of polling.
+- `error` with `statusCode: 408`: the run had not finished when `pollTimeout` ran out. It may still finish later.
+
+`checkStatus` returns these as responses rather than throwing.
+
+## Access Tokens
 
 ### Creating Access Token
 At your server, you can create an access token using the following code:
@@ -295,7 +301,7 @@ async function main() {
     // Update the access token for the Lamatic SDK
     lamatic.updateAccessToken(accessToken);
 
-    // Execute the flow/agent again
+    // Execute the flow again
     const response = await lamatic.executeFlow(flowId, payload);
     console.log(response);
   }
@@ -306,22 +312,22 @@ main();
 
 Here, you are supposed to have a server endpoint that returns a new access token when called. The server should handle the authentication and return the new access token from the same secret generated from Lamatic Studio.
 
+## Responses
+
 ### Response Structure
 
-The `executeFlow` and `executeAgent` method returns a promise that resolves to a `LamaticResponse` object with the following structure:
+`executeFlow`, `executeFlowPoll` and `checkStatus` resolve to a `LamaticResponse` object with the following structure:
 
 ```typescript
 {
-  status: "success" | "error",  // Status of the workflow execution
-  result: object | null,        // The result data from the workflow/agent (if successful)
-  message?: string,             // Error message (if status is "error")
+  status: "success" | "error" | "failed",  // Status of the workflow execution
+  result: object | null,        // The result data from the workflow (if successful)
+  message?: string,             // Error message (if the status is not "success")
   statusCode?: number           // HTTP status code
 }
 ```
 
 ### Example with Error Handling
-
-#### Flow Execution
 
 ```typescript
 async function runWorkflow() {
@@ -343,37 +349,6 @@ async function runWorkflow() {
       return response.result;
     } else {
       console.error("Workflow execution failed:", response.message);
-      return null;
-    }
-  } catch (error) {
-    console.error("Exception occurred:", error);
-    return null;
-  }
-}
-```
-
-#### Agent Execution
-
-```typescript
-async function runAgent() {
-  const agentId = "your-agent-id";
-  const payload = {
-    input: "Generate a creative story about robots",
-    parameters: {
-      temperature: 0.7,
-      maxTokens: 500
-    }
-  };
-  
-  try {
-    const response = await lamatic.executeAgent(agentId, payload);
-    
-    if (response.status === "success") {
-      console.log("Agent executed successfully!");
-      console.log("Result:", response.result);
-      return response.result;
-    } else {
-      console.error("Agent execution failed:", response.message);
       return null;
     }
   } catch (error) {
@@ -416,30 +391,17 @@ const textGenPayload = {
   }
 };
 
-// Example for a tweet generation agent
-const tweetPayload = {
-  prompt: "Write a tweet about the future of technology",
-  options: {
-    maxLength: 280
-  }
-};
-
 // Example for a classification workflow
 const classifyPayload = {
   text: "This is a sample text to classify",
   categories: ["technology", "science", "art"]
 };
 
-// Example for an image analysis agent
-const imageAnalysisPayload = {
-  imageUrl: "https://example.com/image.jpg",
-  analysisTypes: ["objects", "faces", "text"]
-};
 ```
 
 ### Handling Responses
 
-Different workflows/agents may return different result structures. Here's how you might handle responses from different types of workflows/agents:
+Different workflows return different result structures. Here's how you might handle responses from different types of workflows:
 
 ```typescript
 // Text generation workflow response
@@ -449,13 +411,6 @@ if (textResponse.status === "success" && textResponse.result) {
   console.log("Generated text:", generatedText);
 }
 
-// Tweet Generation agent response
-const tweetResponse = await lamatic.executeAgent("tweet-gen-agent-id", tweetPayload);
-if (tweetResponse.status === "success" && tweetResponse.result) {
-  const tweet = tweetResponse.result.tweet;
-  console.log("Generated tweet:", tweet);
-}
-
 // Classification workflow response
 const classificationResponse = await lamatic.executeFlow("classify-flow-id", classifyPayload);
 if (classificationResponse.status === "success" && classificationResponse.result) {
@@ -463,22 +418,12 @@ if (classificationResponse.status === "success" && classificationResponse.result
   const confidence = classificationResponse.result.confidence;
   console.log(`Classification: ${category} (confidence: ${confidence})`);
 }
-
-// Image analysis agent response
-const imageAnalysisResponse = await lamatic.executeAgent("image-analysis-agent-id", imageAnalysisPayload);
-if (imageAnalysisResponse.status === "success" && imageAnalysisResponse.result) {
-  const objects = imageAnalysisResponse.result.objects;
-  const faces = imageAnalysisResponse.result.faces;
-  const text = imageAnalysisResponse.result.text;
-  console.log("Analysis results:", { objects, faces, text });
-}
 ```
 
 ## TypeScript Support
 
 The SDK is written in TypeScript and provides type definitions for all its functionality:
 
-### Workflow Execution Example
 ```typescript
 import { Lamatic, LamaticResponse, LamaticConfig } from "lamatic";
 
@@ -502,43 +447,10 @@ async function generateText(prompt: string): Promise<TextGenerationResult | null
     temperature: 0.7
   };
   
-  const response = await lamatic.executeFlow<TextGenerationResult>("text-gen-flow", payload);
+  const response = await lamatic.executeFlow("text-gen-flow", payload);
   
   if (response.status === "success" && response.result) {
-    return response.result;
-  }
-  
-  return null;
-}
-```
-
-### Agent Execution Example
-```typescript
-import { Lamatic, LamaticResponse, LamaticConfig } from "lamatic";
-
-// Custom payload type
-interface ImageAnalysisPayload {
-  imageUrl: string;
-  analysisTypes: string[];
-}
-
-// Custom response type
-interface ImageAnalysisResult {
-  objects: string[];
-  faces: string[];
-  text: string;
-}
-
-async function analyzeImage(imageUrl: string): Promise<ImageAnalysisResult | null> {
-  const payload: ImageAnalysisPayload = {
-    imageUrl,
-    analysisTypes: ["objects", "faces", "text"]
-  };
-  
-  const response = await lamatic.executeAgent<ImageAnalysisResult>("image-analysis-agent", payload);
-  
-  if (response.status === "success" && response.result) {
-    return response.result;
+    return response.result as TextGenerationResult;
   }
   
   return null;
@@ -549,30 +461,9 @@ async function analyzeImage(imageUrl: string): Promise<ImageAnalysisResult | nul
 
 The SDK throws errors in case of configuration issues or network problems. It's recommended to always wrap SDK calls in try-catch blocks:
 
-### Workflow Execution Example
 ```typescript
 try {
   const response = await lamatic.executeFlow(flowId, payload);
-  // Process response
-} catch (error) {
-  if (error instanceof Error) {
-    // Log the error
-    console.error("SDK Error:", error.message);
-    
-    // Handle specific error scenarios
-    if (error.message.includes("timeout")) {
-      // Handle timeout
-    } else if (error.message.includes("network")) {
-      // Handle network error
-    }
-  }
-}
-```
-
-### Agent Execution Example
-```typescript
-try {
-  const response = await lamatic.executeAgent(agentId, payload);
   // Process response
 } catch (error) {
   if (error instanceof Error) {
