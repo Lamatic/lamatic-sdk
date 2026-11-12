@@ -83,7 +83,7 @@ def test_check_status_success(client):
 def test_check_status_timeout(client):
     respx.post(ENDPOINT).mock(return_value=httpx.Response(
         200,
-        json={"data": {"checkStatus": {"status": "in_progress", "result": None}}},
+        json={"data": {"checkStatus": {"success": True, "status": "in-progress"}}},
     ))
     result = client.check_status("req-slow", poll_interval=1, poll_timeout=2)
     assert result.status == "error"
@@ -119,7 +119,7 @@ async def test_async_check_status_success(client):
 async def test_async_check_status_timeout(client):
     respx.post(ENDPOINT).mock(return_value=httpx.Response(
         200,
-        json={"data": {"checkStatus": {"status": "in_progress", "result": None}}},
+        json={"data": {"checkStatus": {"success": True, "status": "in-progress"}}},
     ))
     result = await client.async_check_status("req-slow", poll_interval=1, poll_timeout=2)
     assert result.status == "error"

@@ -41,8 +41,8 @@ response = lamatic.execute_flow("flow-id", {"prompt": "Hello!"})
 print(response.status)  # "success"
 print(response.result)
 
-# Poll status
-response = lamatic.check_status("request-id", poll_interval=5, poll_timeout=120)
+# Run a flow and, if it runs asynchronously, wait for its result
+response = lamatic.execute_flow_poll("flow-id", {"prompt": "Hello!"}, poll_interval=5, poll_timeout=300)
 
 ```
 
@@ -67,6 +67,30 @@ async def main():
 asyncio.run(main())
 
 ```
+
+## Async Flows
+
+A flow whose API trigger is set to run asynchronously answers at once with only a request ID (`result == {"requestId": ...}`) and keeps running in the background.
+
+`execute_flow_poll` runs a flow and, if it was queued, polls until it finishes. A realtime flow's response comes back unchanged, so it is safe to use for any flow. `async_execute_flow_poll` is the async variant.
+
+```python
+response = lamatic.execute_flow_poll("flow-id", {"prompt": "Hello!"}, poll_interval=5, poll_timeout=300)
+
+if response.status == "success":
+    print(response.result)
+else:
+    print(response.status, response.message)
+```
+
+To poll a request ID you already hold, use `check_status(request_id, poll_interval=15, poll_timeout=900)` or `async_check_status`. They return the same `LamaticResponse`:
+
+- `success`: `result` is the flow's output, the same shape a realtime run returns.
+- `failed`: `message` is the run's error, and `result["failedNode"]` names the node that failed.
+- `error` with `status_code == 404`: the request ID was still unknown after 60 seconds of polling.
+- `error` with `status_code == 408`: the run had not finished when `poll_timeout` ran out. It may still finish later.
+
+They return these as responses rather than raising.
 
 ## Token Streaming
 

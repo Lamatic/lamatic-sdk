@@ -21,6 +21,11 @@ class Lamatic:
 
     name: str = "Lamatic SDK"
 
+    # How long check_status keeps polling a request reported as "not-found". A
+    # run's record reaches the status store a moment after the run is queued, so
+    # a fresh request ID can briefly read as unknown.
+    _not_found_grace: float = 60.0
+
     def __init__(
         self,
         endpoint: str,
@@ -71,6 +76,47 @@ class Lamatic:
             message=op_data.get("message"),
             status_code=response.status_code,
         )
+
+    def _check_status_response(
+        self, response: httpx.Response, request_id: str, elapsed: float
+    ) -> LamaticResponse | None:
+        """Turn one ``checkStatus`` reply into a final response, or None to keep polling.
+
+        ``checkStatus`` returns a JSON scalar holding the run's log record: the
+        flow's result sits at ``data.output.result``, and a failed run's message
+        at ``data.output.result.errorMsg``.
+        """
+        data = response.json()
+        if "errors" in data:
+            return LamaticResponse(
+                status="error",
+                result=None,
+                message=data["errors"][0]["message"],
+                status_code=response.status_code,
+            )
+        check = (data.get("data") or {}).get("checkStatus") or {}
+        status = check.get("status")
+        if status in ("success", "error", "failed"):
+            output = (check.get("data") or {}).get("output") or {}
+            result = output.get("result", check.get("result"))
+            message = None
+            if status != "success":
+                error_msg = result.get("errorMsg") if isinstance(result, dict) else None
+                message = error_msg or check.get("error") or check.get("message") or "Workflow execution failed"
+            return LamaticResponse(
+                status=status,
+                result=result,
+                message=message,
+                status_code=response.status_code,
+            )
+        if status == "not-found" and elapsed >= self._not_found_grace:
+            return LamaticResponse(
+                status="error",
+                result=None,
+                message=f"Request {request_id} was not found",
+                status_code=404,
+            )
+        return None
 
     def update_access_token(self, access_token: str) -> None:
         """Update the access token at runtime (e.g. after token refresh)."""
@@ -182,37 +228,49 @@ class Lamatic:
         query = {
             "query": """
                 query CheckStatus($requestId: String!) {
-                    checkStatus(requestId: $requestId) {
-                        status
-                        result
-                    }
+                    checkStatus(requestId: $requestId)
                 }
             """,
             "variables": {"requestId": request_id},
         }
         start = time.monotonic()
+        last_error = None
         while time.monotonic() - start < poll_timeout:
             try:
                 with httpx.Client(timeout=self.timeout) as client:
                     response = client.post(self.endpoint, json=query, headers=self._get_headers())
-                result = self._parse_response(response, "checkStatus")
-                if result.status in ("success", "error", "failed"):
+                result = self._check_status_response(response, request_id, time.monotonic() - start)
+                if result is not None:
                     return result
             except Exception as e:
+                # A dropped connection or a non-JSON reply (such as a gateway
+                # error page) is usually transient, so keep polling until the timeout.
                 logger.error("checkStatus request failed: %s", e)
-                return LamaticResponse(status="error", result=None, message=str(e), status_code=500)
+                last_error = str(e)
 
             remaining = poll_timeout - (time.monotonic() - start)
             if remaining <= 0:
                 break
             time.sleep(min(poll_interval, remaining))
 
-        return LamaticResponse(
-            status="error",
-            result=None,
-            message=f"Request checkStatus timed out after {poll_timeout} seconds, your request may still be executing in the background.",
-            status_code=408,
-        )
+        return _timed_out(poll_timeout, last_error)
+
+    def execute_flow_poll(
+        self,
+        flow_id: str,
+        payload: dict,
+        poll_interval: int = 15,
+        poll_timeout: int = 900,
+    ) -> LamaticResponse:
+        """Execute a workflow and, if it runs asynchronously, poll until it finishes.
+
+        A realtime flow's response is returned as is.
+        """
+        response = self.execute_flow(flow_id, payload)
+        request_id = _queued_request_id(response)
+        if request_id:
+            return self.check_status(request_id, poll_interval, poll_timeout)
+        return response
 
 
     async def async_execute_flow(self, flow_id: str, payload: dict) -> LamaticResponse:
@@ -301,34 +359,65 @@ class Lamatic:
         query = {
             "query": """
                 query CheckStatus($requestId: String!) {
-                    checkStatus(requestId: $requestId) {
-                        status
-                        result
-                    }
+                    checkStatus(requestId: $requestId)
                 }
             """,
             "variables": {"requestId": request_id},
         }
         start = time.monotonic()
+        last_error = None
         while time.monotonic() - start < poll_timeout:
             try:
                 async with httpx.AsyncClient(timeout=self.timeout) as client:
                     response = await client.post(self.endpoint, json=query, headers=self._get_headers())
-                result = self._parse_response(response, "checkStatus")
-                if result.status in ("success", "error", "failed"):
+                result = self._check_status_response(response, request_id, time.monotonic() - start)
+                if result is not None:
                     return result
             except Exception as e:
+                # A dropped connection or a non-JSON reply (such as a gateway
+                # error page) is usually transient, so keep polling until the timeout.
                 logger.error("checkStatus request failed: %s", e)
-                return LamaticResponse(status="error", result=None, message=str(e), status_code=500)
+                last_error = str(e)
 
             remaining = poll_timeout - (time.monotonic() - start)
             if remaining <= 0:
                 break
             await asyncio.sleep(min(poll_interval, remaining))
 
-        return LamaticResponse(
-            status="error",
-            result=None,
-            message=f"Request checkStatus timed out after {poll_timeout} seconds, your request may still be executing in the background.",
-            status_code=408,
-        )
+        return _timed_out(poll_timeout, last_error)
+
+    async def async_execute_flow_poll(
+        self,
+        flow_id: str,
+        payload: dict,
+        poll_interval: int = 15,
+        poll_timeout: int = 900,
+    ) -> LamaticResponse:
+        """Async variant of :meth:`execute_flow_poll`."""
+        response = await self.async_execute_flow(flow_id, payload)
+        request_id = _queued_request_id(response)
+        if request_id:
+            return await self.async_check_status(request_id, poll_interval, poll_timeout)
+        return response
+
+
+def _timed_out(poll_timeout: float, last_error: str | None) -> LamaticResponse:
+    message = f"Request checkStatus timed out after {poll_timeout} seconds, your request may still be executing in the background."
+    if last_error:
+        message += f" Last error: {last_error}"
+    return LamaticResponse(status="error", result=None, message=message, status_code=408)
+
+
+def _queued_request_id(response: LamaticResponse) -> str | None:
+    """The request ID of a run that was queued rather than executed.
+
+    An async flow answers at once with ``result: {"requestId": ...}`` and
+    nothing else; a realtime flow's result also carries ``requestId``, but next
+    to its own fields.
+    """
+    result = response.result
+    if response.status != "success" or not isinstance(result, dict):
+        return None
+    if list(result) == ["requestId"] and isinstance(result["requestId"], str):
+        return result["requestId"]
+    return None
