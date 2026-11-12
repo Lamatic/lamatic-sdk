@@ -174,6 +174,7 @@ class Lamatic {
    * @param {Object} payload - The payload to pass to the workflow
    * @param {LamaticStreamOptions} [options] - Abort signal and trigger source overrides
    * @yields {LamaticStreamChunk} Chunks of the streaming response
+   * @deprecated Use {@link executeFlowTokenStream}. This method will be removed in 1.0.0.
    */
   async *executeFlowStream(
     flowId: string,
@@ -450,6 +451,7 @@ class Lamatic {
     const startTime = Date.now();
     const timeoutMs = pollTimeout * 1000;
     const intervalMs = pollInterval * 1000;
+    let lastError: string | undefined;
 
     while (Date.now() - startTime < timeoutMs) {
       try {
@@ -500,26 +502,24 @@ class Lamatic {
             statusCode: 404
           };
         }
-
-        if (Date.now() - startTime + intervalMs < timeoutMs) {
-          await new Promise(resolve => setTimeout(resolve, intervalMs));
-        }
-
       } catch (error: Error | any) {
+        // A dropped connection or a non-JSON reply (such as a gateway error
+        // page) is usually transient, so keep polling until the timeout.
         console.error("[Lamatic SDK Error] : ", error.message);
-        return {
-          status: "error",
-          result: null,
-          message: error.message,
-          statusCode: 500
-        };
+        lastError = error.message;
+      }
+
+      const remainingMs = timeoutMs - (Date.now() - startTime);
+      if (remainingMs > 0) {
+        await new Promise(resolve => setTimeout(resolve, Math.min(intervalMs, remainingMs)));
       }
     }
 
     return {
       status: "error",
       result: null,
-      message: `Request checkStatus timedout after ${pollTimeout} seconds, your request may still be executing in the background and you can check after few minutes`,
+      message: `Request checkStatus timed out after ${pollTimeout} seconds, your request may still be executing in the background and you can check after a few minutes` +
+        (lastError ? `. Last error: ${lastError}` : ""),
       statusCode: 408
     };
   }
