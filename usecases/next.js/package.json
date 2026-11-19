@@ -6,14 +6,14 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "eslint ."
   },
   "dependencies": {
     "dotenv": "^16.4.7",
-    "jsonwebtoken": "^9.0.2",
+    "jsonwebtoken": "^9.0.3",
     "jwt-decode": "^4.0.0",
     "lamatic": "file:../..",
-    "next": "15.2.3",
+    "next": "^16.4.6",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
@@ -25,7 +25,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "15.2.3",
+    "eslint-config-next": "^16.4.6",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
