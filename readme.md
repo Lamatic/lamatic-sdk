@@ -194,10 +194,6 @@ async function send(prompt: string) {
 }
 ```
 
-### `executeFlowStream`
-
-The older `executeFlowStream` still works and now streams correctly, yielding `{ event, data, message, done }` chunks where `event` is one of `data` (a token), `result`, `error` or `done`. It is deprecated and will be removed in 1.0.0: use `executeFlowTokenStream`, which also reports per-node output and the accumulated text.
-
 ## Async Flows
 
 A flow whose API trigger is set to run asynchronously answers at once with only a request ID (`result: { requestId }`) and keeps running in the background.
