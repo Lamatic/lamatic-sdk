@@ -22,8 +22,13 @@ SDKs have it and this table is updated in all three.
 
 Agents are not supported: the platform's `executeAgent` API is deprecated.
 
-Language-specific extras, which need no counterpart: TypeScript keeps the legacy
-`executeFlowStream`; Go has `Response.Decode` and a `Logger` hook.
+Language-specific extras, which need no counterpart: Go has `Response.Decode` and
+a `Logger` hook. TypeScript's legacy `executeFlowStream` is deprecated and will be removed in
+1.0.0.
+
+Polling options follow each language's idiom: TypeScript `{ interval, timeout }`
+in seconds, Python `poll_interval` / `poll_timeout` in seconds, Go
+`*PollOptions{Interval, Timeout}` as `time.Duration`.
 
 ## Shared behaviour
 
@@ -37,7 +42,14 @@ Each SDK maps it to its response type the same way:
 | `success` | `success` | `data.output.result` | | HTTP status |
 | `failed` | `failed` | `data.output.result` | `data.output.result.errorMsg` | HTTP status |
 | `not-found` | keeps polling for 60 s, then `error` | | `Request <id> was not found` | 404 |
-| poll timeout | `error` | | timed-out message | 408 |
+| poll timeout | `error` | | timed-out message, plus the last network error if any | 408 |
+
+A network error or a non-JSON reply (such as a gateway error page) during polling
+does not end it: the SDK keeps polling until the timeout. A GraphQL error, such as
+a bad API key, ends polling at once with status `error`.
+
+`failed` means the flow ran and a node failed. `error` means the request itself
+failed. The SDKs' status types list exactly `success`, `error` and `failed`.
 
 `executeFlowPoll` polls only when `executeFlow` answers with a result that holds
 nothing but `requestId`, which is what a queued (async) flow returns. Any other

@@ -196,7 +196,7 @@ async function send(prompt: string) {
 
 ### `executeFlowStream`
 
-The older `executeFlowStream` still works and now streams correctly, yielding `{ event, data, message, done }` chunks where `event` is one of `data` (a token), `result`, `error` or `done`. New code should prefer `executeFlowTokenStream`, which also reports per-node output and the accumulated text.
+The older `executeFlowStream` still works and now streams correctly, yielding `{ event, data, message, done }` chunks where `event` is one of `data` (a token), `result`, `error` or `done`. It is deprecated and will be removed in 1.0.0: use `executeFlowTokenStream`, which also reports per-node output and the accumulated text.
 
 ## Async Flows
 
@@ -320,7 +320,7 @@ Here, you are supposed to have a server endpoint that returns a new access token
 
 ```typescript
 {
-  status: "success" | "error" | "failed",  // Status of the workflow execution
+  status: "success" | "error" | "failed",  // "failed": a node failed; "error": the request failed
   result: object | null,        // The result data from the workflow (if successful)
   message?: string,             // Error message (if the status is not "success")
   statusCode?: number           // HTTP status code
