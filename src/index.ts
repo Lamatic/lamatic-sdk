@@ -3,7 +3,6 @@ import {
   LamaticAPIResponse,
   LamaticCheckStatusResult,
   LamaticResponse,
-  LamaticStreamChunk,
   LamaticRawStreamChunk,
   LamaticStreamOptions,
   LamaticTokenEvent,
@@ -160,40 +159,6 @@ class Lamatic {
       if (error?.name === "AbortError") return;
       console.error("[Lamatic SDK Error] : ", error.message);
       yield { type: "error", message: error.message };
-    }
-  }
-
-  /**
-   * Execute a workflow and stream the response via Server-Sent Events.
-   *
-   * Thin wrapper over {@link executeFlowTokenStream} kept for backwards
-   * compatibility. New code should use `executeFlowTokenStream`, which reports
-   * per-node output and the accumulated text.
-   *
-   * @param {string} flowId - The ID of the workflow to execute
-   * @param {Object} payload - The payload to pass to the workflow
-   * @param {LamaticStreamOptions} [options] - Abort signal and trigger source overrides
-   * @yields {LamaticStreamChunk} Chunks of the streaming response
-   * @deprecated Use {@link executeFlowTokenStream}. This method will be removed in 1.0.0.
-   */
-  async *executeFlowStream(
-    flowId: string,
-    payload: Object,
-    options: LamaticStreamOptions = {}
-  ): AsyncGenerator<LamaticStreamChunk> {
-    for await (const event of this.executeFlowTokenStream(flowId, payload, options)) {
-      switch (event.type) {
-        case "token":
-          yield { event: "data", data: event.token, done: false };
-          break;
-        case "error":
-          yield { event: "error", message: event.message, done: false };
-          break;
-        case "final":
-          yield { event: "result", data: event.result, done: false };
-          yield { event: "done", done: true };
-          return;
-      }
     }
   }
 

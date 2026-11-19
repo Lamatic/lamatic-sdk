@@ -47,13 +47,6 @@ export interface LamaticResponse {
     requestId?: string;
 }
 
-export interface LamaticStreamChunk {
-    event?: string;
-    data?: string | Record<string, any> | null;
-    message?: string;
-    done: boolean;
-}
-
 export interface PollOptions {
     interval?: number;  // polling interval in seconds (default: 15)
     timeout?: number;   // max wait time in seconds (default: 900)
