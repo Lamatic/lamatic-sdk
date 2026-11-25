@@ -23,8 +23,7 @@ SDKs have it and this table is updated in all three.
 Agents are not supported: the platform's `executeAgent` API is deprecated.
 
 Language-specific extras, which need no counterpart: Go has `Response.Decode` and
-a `Logger` hook. TypeScript's legacy `executeFlowStream` is deprecated and will be removed in
-1.0.0.
+a `Logger` hook.
 
 Polling options follow each language's idiom: TypeScript `{ interval, timeout }`
 in seconds, Python `poll_interval` / `poll_timeout` in seconds, Go
