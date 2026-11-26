@@ -40,4 +40,5 @@ request, plus [PARITY.md](PARITY.md). Each folder explains how to run its tests.
 
 ## License
 
-See the `LICENSE` file in each SDK's folder.
+MIT. See [LICENSE](LICENSE). Each SDK folder carries a copy so it is included in
+its published package.
