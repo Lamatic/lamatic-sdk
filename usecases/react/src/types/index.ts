@@ -11,5 +11,4 @@ export interface Credentials {
     projectId: string;
     endpoint: string;
     flowId: string;
-    agentId: string;
 }

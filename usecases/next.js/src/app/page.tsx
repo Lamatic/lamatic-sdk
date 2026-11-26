@@ -18,7 +18,6 @@ export interface Credentials {
   projectId: string;
   endpoint: string;
   flowId: string;
-  agentId: string;
 }
 
 export default function Home() {
@@ -28,8 +27,7 @@ export default function Home() {
     apiKey: '',
     projectId: '',
     endpoint: '',
-    flowId: '',
-    agentId: ''
+    flowId: ''
   });
 
   const [keyValuePairs, setKeyValuePairs] = useState<KeyValuePair[]>([
@@ -41,23 +39,12 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [isConfigured, setIsConfigured] = useState<boolean>(false);
   const [lamaticInstance, setLamaticInstance] = useState<Lamatic | null>(null);
-  const [executionType, setExecutionType] = useState<'flow' | 'agent' | ''>('');
   const [showTokenInput, setShowTokenInput] = useState<boolean>(false);
   const [newToken, setNewToken] = useState<string>('');
 
   const handleCredentialChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setCredentials((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleExecutionTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newType = e.target.value as 'flow' | 'agent';
-    setExecutionType(newType);
-    setCredentials((prev) => ({
-      ...prev,
-      flowId: newType === 'flow' ? prev.flowId : '',
-      agentId: newType === 'agent' ? prev.agentId : ''
-    }));
   };
 
   const handleKeyValueChange = (id: string, field: 'key' | 'value', value: string) => {
@@ -149,12 +136,8 @@ export default function Home() {
       return;
     }
 
-    if (!credentials.flowId && !credentials.agentId) {
-      setError('Please enter either a Flow ID or an Agent ID');
-      return;
-    }
-    if (credentials.flowId && credentials.agentId) {
-      setError('Please enter only one: Flow ID or Agent ID');
+    if (!credentials.flowId) {
+      setError('Please enter a Flow ID');
       return;
     }
     
@@ -165,12 +148,7 @@ export default function Home() {
 
     try {
       const payload = buildPayload();
-      let result;
-      if (credentials.flowId) {
-        result = await lamaticInstance.executeFlow(credentials.flowId, payload);
-      } else if (credentials.agentId) {
-        result = await lamaticInstance.executeAgent(credentials.agentId, payload);
-      }
+      const result = await lamaticInstance.executeFlow(credentials.flowId, payload);
 
       setResponse(result);
       setResponseStatus(result?.statusCode || null);
@@ -420,46 +398,17 @@ export default function Home() {
               />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Execution Type</label>
-                <select
-                  value={executionType}
-                  onChange={handleExecutionTypeChange}
-                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-red-500 focus:border-red-500"
-                >
-                  <option value="">Select Type</option>
-                  <option value="flow">Flow</option>
-                  <option value="agent">Agent</option>
-                </select>
-              </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Flow ID</label>
+              <input
+                type="text"
+                name="flowId"
+                value={credentials.flowId}
+                onChange={handleCredentialChange}
+                placeholder="your-flow-id"
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-red-500 focus:border-red-500"
+              />
             </div>
-            {executionType === 'flow' && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Flow ID</label>
-                <input
-                  type="text"
-                  name="flowId"
-                  value={credentials.flowId}
-                  onChange={handleCredentialChange}
-                  placeholder="your-flow-id"
-                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-red-500 focus:border-red-500"
-                />
-              </div>
-            )}
-            {executionType === 'agent' && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Agent ID</label>
-                <input
-                  type="text"
-                  name="agentId"
-                  value={credentials.agentId}
-                  onChange={handleCredentialChange}
-                  placeholder="your-agent-id"
-                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-red-500 focus:border-red-500"
-                />
-              </div>
-            )}
             
           </div>
           
