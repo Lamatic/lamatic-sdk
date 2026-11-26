@@ -11,7 +11,7 @@ from lamatic import Lamatic
 ENDPOINT = "https://test.lamatic.ai/api/graphql"
 
 # Real API responses, shared with the TypeScript and Go SDK test suites.
-FIXTURES = json.loads((Path(__file__).parent / "fixtures" / "check_status.json").read_text())
+FIXTURES = json.loads((Path(__file__).resolve().parents[2] / "fixtures" / "check_status.json").read_text())
 
 
 @pytest.fixture
