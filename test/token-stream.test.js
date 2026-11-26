@@ -152,14 +152,3 @@ test("breaking out early closes the connection", async () => {
   }
   await closedPromise;
 });
-
-test("executeFlowStream keeps its chunk shape", async () => {
-  respond = sse(token("a"), token("b"), finished({ x: 1 }));
-  const chunks = await collect(lamatic.executeFlowStream("flow-1", {}));
-  assert.deepEqual(chunks, [
-    { event: "data", data: "a", done: false },
-    { event: "data", data: "b", done: false },
-    { event: "result", data: { x: 1 }, done: false },
-    { event: "done", done: true },
-  ]);
-});

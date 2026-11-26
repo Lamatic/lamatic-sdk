@@ -3,7 +3,6 @@ import {
   LamaticAPIResponse,
   LamaticCheckStatusResult,
   LamaticResponse,
-  LamaticStreamChunk,
   LamaticRawStreamChunk,
   LamaticStreamOptions,
   LamaticTokenEvent,
@@ -160,39 +159,6 @@ class Lamatic {
       if (error?.name === "AbortError") return;
       console.error("[Lamatic SDK Error] : ", error.message);
       yield { type: "error", message: error.message };
-    }
-  }
-
-  /**
-   * Execute a workflow and stream the response via Server-Sent Events.
-   *
-   * Thin wrapper over {@link executeFlowTokenStream} kept for backwards
-   * compatibility. New code should use `executeFlowTokenStream`, which reports
-   * per-node output and the accumulated text.
-   *
-   * @param {string} flowId - The ID of the workflow to execute
-   * @param {Object} payload - The payload to pass to the workflow
-   * @param {LamaticStreamOptions} [options] - Abort signal and trigger source overrides
-   * @yields {LamaticStreamChunk} Chunks of the streaming response
-   */
-  async *executeFlowStream(
-    flowId: string,
-    payload: Object,
-    options: LamaticStreamOptions = {}
-  ): AsyncGenerator<LamaticStreamChunk> {
-    for await (const event of this.executeFlowTokenStream(flowId, payload, options)) {
-      switch (event.type) {
-        case "token":
-          yield { event: "data", data: event.token, done: false };
-          break;
-        case "error":
-          yield { event: "error", message: event.message, done: false };
-          break;
-        case "final":
-          yield { event: "result", data: event.result, done: false };
-          yield { event: "done", done: true };
-          return;
-      }
     }
   }
 
@@ -450,6 +416,7 @@ class Lamatic {
     const startTime = Date.now();
     const timeoutMs = pollTimeout * 1000;
     const intervalMs = pollInterval * 1000;
+    let lastError: string | undefined;
 
     while (Date.now() - startTime < timeoutMs) {
       try {
@@ -500,26 +467,24 @@ class Lamatic {
             statusCode: 404
           };
         }
-
-        if (Date.now() - startTime + intervalMs < timeoutMs) {
-          await new Promise(resolve => setTimeout(resolve, intervalMs));
-        }
-
       } catch (error: Error | any) {
+        // A dropped connection or a non-JSON reply (such as a gateway error
+        // page) is usually transient, so keep polling until the timeout.
         console.error("[Lamatic SDK Error] : ", error.message);
-        return {
-          status: "error",
-          result: null,
-          message: error.message,
-          statusCode: 500
-        };
+        lastError = error.message;
+      }
+
+      const remainingMs = timeoutMs - (Date.now() - startTime);
+      if (remainingMs > 0) {
+        await new Promise(resolve => setTimeout(resolve, Math.min(intervalMs, remainingMs)));
       }
     }
 
     return {
       status: "error",
       result: null,
-      message: `Request checkStatus timedout after ${pollTimeout} seconds, your request may still be executing in the background and you can check after few minutes`,
+      message: `Request checkStatus timed out after ${pollTimeout} seconds, your request may still be executing in the background and you can check after a few minutes` +
+        (lastError ? `. Last error: ${lastError}` : ""),
       statusCode: 408
     };
   }

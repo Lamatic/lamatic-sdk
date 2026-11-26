@@ -20,7 +20,7 @@ before(async () => {
     requests.push(JSON.parse(body));
     const reply = replies.length > 1 ? replies.shift() : replies[0];
     res.writeHead(200, { "content-type": "application/json" });
-    res.end(JSON.stringify(reply));
+    res.end(typeof reply === "string" ? reply : JSON.stringify(reply));
   });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   lamatic = new Lamatic({
@@ -107,4 +107,19 @@ test("executeFlowPoll returns a realtime flow's response without polling", async
 
   assert.equal(res.result.answer, "now");
   assert.equal(requests.length, 1);
+});
+
+test("checkStatus keeps polling through a dropped connection", async () => {
+  // One reply that is not JSON, as a gateway error page would be, then the real answer.
+  reset("not json", fixtures.success);
+  const res = await lamatic.checkStatus("req-1", 0.01, 5);
+  assert.equal(res.status, "success");
+  assert.equal(requests.length, 2);
+});
+
+test("checkStatus reports the last error when the timeout runs out", async () => {
+  reset("not json");
+  const res = await lamatic.checkStatus("req-1", 0.01, 0.05);
+  assert.equal(res.statusCode, 408);
+  assert.match(res.message, /Last error: /);
 });

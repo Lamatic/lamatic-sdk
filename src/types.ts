@@ -9,7 +9,8 @@ interface Error {
     message: string;
 }
 
-export type LamaticStatus = "success" | "error" | "pending" | "processing" | "failed";
+/** `failed` means the flow ran and a node failed; `error` means the request itself failed. */
+export type LamaticStatus = "success" | "error" | "failed";
 
 export interface LamaticAPIResponse {
     data: {
@@ -44,13 +45,6 @@ export interface LamaticResponse {
     message?: string;
     statusCode?: number;
     requestId?: string;
-}
-
-export interface LamaticStreamChunk {
-    event?: string;
-    data?: string | Record<string, any> | null;
-    message?: string;
-    done: boolean;
 }
 
 export interface PollOptions {
