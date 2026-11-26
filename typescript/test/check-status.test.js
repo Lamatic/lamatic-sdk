@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { Lamatic } from "../dist/index.js";
 
 // Real API responses, shared with the Python and Go SDK test suites.
-const fixtures = JSON.parse(readFileSync(new URL("./fixtures/check-status.json", import.meta.url)));
+const fixtures = JSON.parse(readFileSync(new URL("../../fixtures/check_status.json", import.meta.url)));
 
 // Each test queues the bodies the server answers with, one per request.
 let replies = [];

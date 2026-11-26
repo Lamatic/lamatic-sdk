@@ -1,0 +1,54 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "lamatic"
+dynamic = ["version"]
+description = "Python SDK for the Lamatic API"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+authors = [
+    { name = "Lamatic", email = "hello@lamatic.ai" },
+]
+keywords = ["lamatic", "ai", "sdk", "graphql", "agents", "workflows", "llm"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Typing :: Typed",
+]
+dependencies = [
+    "httpx>=0.27.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "respx>=0.21.0",
+]
+
+[project.urls]
+Homepage = "https://lamatic.ai"
+Documentation = "https://lamatic.ai/docs"
+Repository = "https://github.com/Lamatic/lamatic-sdk/tree/main/python"
+Issues = "https://github.com/Lamatic/lamatic-sdk/issues"
+
+[tool.hatch.version]
+path = "lamatic/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["lamatic"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"

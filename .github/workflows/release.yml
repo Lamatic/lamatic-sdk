@@ -1,0 +1,77 @@
+name: Release
+
+# Push a tag from main to release one SDK:
+#   ts/v1.2.3  -> npm        py/v1.2.3  -> PyPI        go/v1.2.3  -> Go module proxy
+on:
+  push:
+    tags: ['ts/v*', 'py/v*', 'go/v*']
+
+permissions:
+  contents: read
+
+jobs:
+  npm:
+    if: startsWith(github.ref_name, 'ts/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # npm provenance
+    defaults:
+      run:
+        working-directory: typescript
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - name: Tag matches package.json
+        run: test "ts/v$(node -p "require('./package.json').version")" = "${GITHUB_REF_NAME}"
+      - run: npm ci
+      - run: npm test
+      - run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  pypi:
+    if: startsWith(github.ref_name, 'py/v')
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      contents: read
+      id-token: write # PyPI trusted publishing
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Tag matches lamatic/__init__.py
+        working-directory: python
+        run: |
+          v=$(sed -n 's/^__version__ = "\(.*\)"/\1/p' lamatic/__init__.py)
+          test "py/v$v" = "${GITHUB_REF_NAME}"
+      - run: pip install build pytest pytest-asyncio respx && pip install -e python
+      - run: pytest
+        working-directory: python
+      - run: python -m build
+        working-directory: python
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: python/dist
+
+  go:
+    if: startsWith(github.ref_name, 'go/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go/go.mod
+      - run: go vet ./... && go test ./...
+        working-directory: go

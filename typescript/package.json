@@ -13,6 +13,11 @@
   },
   "author": "Lamatic",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Lamatic/lamatic-sdk.git",
+    "directory": "typescript"
+  },
   "description": "Lamatic AI SDK for TypeScript to execute flow",
   "devDependencies": {
     "@types/node": "^22.13.0",

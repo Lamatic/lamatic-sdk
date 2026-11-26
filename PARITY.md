@@ -1,13 +1,14 @@
 # SDK parity
 
-Lamatic has three SDKs that must offer the same features with the same behaviour:
+Lamatic has three SDKs that must offer the same features with the same behaviour.
+They all live in this repo:
 
-- TypeScript: [Lamatic/lamatic-sdk](https://github.com/Lamatic/lamatic-sdk) (npm `lamatic`)
-- Python: [Lamatic/Lamatic-Python-SDK](https://github.com/Lamatic/Lamatic-Python-SDK) (PyPI `lamatic`)
-- Go: [Lamatic/lamatic-sdk-go](https://github.com/Lamatic/lamatic-sdk-go) (`github.com/Lamatic/lamatic-sdk-go`)
+- TypeScript: [`typescript/`](typescript) (npm `lamatic`)
+- Python: [`python/`](python) (PyPI `lamatic`)
+- Go: [`go/`](go) (`github.com/Lamatic/lamatic-sdk/go`)
 
-This file is identical in all three repos. A feature is not done until all three
-SDKs have it and this table is updated in all three.
+A feature is not done until all three SDKs have it and this table is updated in
+the same pull request.
 
 ## Features
 
@@ -59,11 +60,10 @@ response is returned unchanged.
 
 ## Shared test fixtures
 
-The polling tests in every SDK run against the same recorded API responses:
+The polling tests in every SDK run against the same recorded API responses,
+`fixtures/check_status.json`. TypeScript and Python read it directly.
 
-- TypeScript: `test/fixtures/check-status.json`
-- Python: `tests/fixtures/check_status.json`
-- Go: `pkg/lamatic/testdata/check_status.json`
-
-Keep the three copies identical. When the API changes, record new responses
-once and copy them to all three repos.
+Go cannot: its module only contains files under `go/`. Go keeps a copy at
+`go/pkg/lamatic/testdata/check_status.json`, and CI fails if the copy differs.
+When the API changes, record new responses once in `fixtures/` and copy them to
+the Go folder.
