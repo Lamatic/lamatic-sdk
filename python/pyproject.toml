@@ -41,8 +41,8 @@ dev = [
 [project.urls]
 Homepage = "https://lamatic.ai"
 Documentation = "https://lamatic.ai/docs"
-Repository = "https://github.com/Lamatic/Lamatic-Python-SDK"
-Issues = "https://github.com/Lamatic/Lamatic-Python-SDK/issues"
+Repository = "https://github.com/Lamatic/lamatic-sdk/tree/main/python"
+Issues = "https://github.com/Lamatic/lamatic-sdk/issues"
 
 [tool.hatch.version]
 path = "lamatic/__init__.py"
