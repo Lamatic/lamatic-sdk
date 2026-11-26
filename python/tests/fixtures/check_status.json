@@ -1,0 +1,89 @@
+{
+  "_comment": "Real responses recorded from the Lamatic API on 2026-11-06 with async test flows. checkStatus returns a JSON scalar: {success, status, data: {input, output: {result, tokensInfo}, timeTakenInSeconds}}. Shared by the TypeScript, Python and Go SDK test suites; keep the three copies identical.",
+  "queued": {
+    "data": {
+      "executeWorkflow": {
+        "status": "success",
+        "result": {
+          "requestId": "b896236e-c1a6-4abd-mw4g2792-rubzr973"
+        }
+      }
+    }
+  },
+  "inProgress": {
+    "data": {
+      "checkStatus": {
+        "success": true,
+        "status": "in-progress"
+      }
+    }
+  },
+  "success": {
+    "data": {
+      "checkStatus": {
+        "success": true,
+        "status": "success",
+        "data": {
+          "input": {
+            "sampleInput": "Reply with exactly: hello async"
+          },
+          "output": {
+            "result": {
+              "answer": "hello async",
+              "requestId": "b896236e-c1a6-4abd-mw4g2792-rubzr973"
+            },
+            "tokensInfo": {
+              "inputTokens": 97,
+              "outputTokens": 62,
+              "totalTokens": 159,
+              "inputCost": 9.7e-06,
+              "outputCost": 3.1e-05,
+              "totalCost": 6.62e-05
+            }
+          },
+          "timeTakenInSeconds": 3.368
+        }
+      }
+    }
+  },
+  "failed": {
+    "data": {
+      "checkStatus": {
+        "success": true,
+        "status": "failed",
+        "data": {
+          "input": {
+            "sampleInput": "Reply with exactly: hello async"
+          },
+          "output": {
+            "result": {
+              "errorMsg": "LLM node failed: 404 groq error: The model `this-model-does-not-exist` does not exist or you do not have access to it.",
+              "failedNode": {
+                "nodeId": "LLMNode_110",
+                "nodeName": "Generate Text",
+                "nodeSlug": "LLMNode"
+              }
+            },
+            "tokensInfo": {
+              "inputTokens": 0,
+              "outputTokens": 0,
+              "totalTokens": 0,
+              "inputCost": 0,
+              "outputCost": 0,
+              "totalCost": 0
+            }
+          },
+          "timeTakenInSeconds": 0.694
+        }
+      }
+    }
+  },
+  "notFound": {
+    "data": {
+      "checkStatus": {
+        "success": true,
+        "status": "not-found"
+      }
+    }
+  }
+}
