@@ -6,7 +6,7 @@ import (
 	"os"
 	"os/signal"
 
-	"github.com/Lamatic/lamatic-sdk-go/pkg/lamatic"
+	"github.com/Lamatic/lamatic-sdk/go/pkg/lamatic"
 )
 
 func main() {

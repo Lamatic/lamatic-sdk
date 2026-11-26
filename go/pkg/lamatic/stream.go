@@ -7,7 +7,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/Lamatic/lamatic-sdk-go/internal/client"
+	"github.com/Lamatic/lamatic-sdk/go/internal/client"
 )
 
 // streamSubscription is the executeWorkflowWithStream subscription. Its field
